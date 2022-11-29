@@ -169,8 +169,8 @@ def _export_profile_to_bigquery(id, profile):
 
     project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
 
-    print(profile)
-    del profile['user']['topBadges']
+    print(profile['user']['topBadges'])
+#    del profile['user']['topBadges']
     profile_df = pd.json_normalize(profile)
     print("print 1")
     print(profile_df.to_string())
