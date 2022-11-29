@@ -172,6 +172,8 @@ def _export_profile_to_bigquery(id, profile):
     print(profile)
 
     profile_df = pd.json_normalize(profile)
+    print("print 1")
+    print(profile_df.to_string())
     profile_columns = [
         "user.age",
         "user.city",
@@ -187,6 +189,7 @@ def _export_profile_to_bigquery(id, profile):
         "user.timezone",
     ]
     profile_df = _normalize_response(profile_df, profile_columns, id)
+    print("print 2")
     print(profile_df.to_string())
     pandas_gbq.to_gbq(
         dataframe=profile_df,
