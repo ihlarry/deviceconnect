@@ -169,6 +169,8 @@ def _export_profile_to_bigquery(id, profile):
 
     project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
 
+    print(profile)
+
     profile_df = pd.json_normalize(profile)
     profile_columns = [
         "user.age",
