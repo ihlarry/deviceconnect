@@ -48,6 +48,7 @@ Configuration:
     https://flask-dance.readthedocs.io/
 """
 import os
+import json
 from datetime import date
 import requests
 import logging
@@ -127,7 +128,7 @@ def device_registration():
             )
 
             if resp.status_code == requests.codes.ok:
-                _export_profile_to_bigquery(username, resp.content)
+                _export_profile_to_bigquery(username, json.loads(resp.content))
 
         except (Exception) as e:
             print("error" + e)
