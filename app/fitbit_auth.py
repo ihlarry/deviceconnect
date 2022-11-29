@@ -187,7 +187,7 @@ def _export_profile_to_bigquery(id, profile):
         "user.timezone",
     ]
     profile_df = _normalize_response(profile_df, profile_columns, id)
-
+    print(profile_df.to_string())
     pandas_gbq.to_gbq(
         dataframe=profile_df,
         destination_table=_tablename("profile"),
