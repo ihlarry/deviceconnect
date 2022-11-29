@@ -188,7 +188,7 @@ def _export_profile_to_bigquery(id, profile):
     ]
     profile_df = _normalize_response(profile_df, profile_columns, id)
 
-    profile_df.head(5)
+    print(profile_df.head(5))
 
     pandas_gbq.to_gbq(
         dataframe=profile_df,
