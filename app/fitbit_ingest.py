@@ -130,7 +130,7 @@ def ingest():
         )
 
 #        except (Exception) as e:
-            log.error("exception occured: %s", str(e))
+#            log.error("exception occured: %s", str(e))
 
     return str(result)
 
