@@ -202,68 +202,68 @@ def _export_profile_to_bigquery(id, profile):
             {
                 "name": "date",
                 "type": "DATE",
-                "description": "Date of authorization",
+                "description": "Date of authorization"
             },
             {
                 "name": "user_age",
                 "type": "INTEGER",
-                "description": "The age based on their specified birthday in the user's account settings.",
+                "description": "The age based on their specified birthday in the user's account settings."
             },
             {
                 "name": "user_city",
                 "type": "STRING",
-                "description": "The city specified in the user's account settings. Location scope is required to see this value.",
+                "description": "The city specified in the user's account settings. Location scope is required to see this value."
             },
             {
                 "name": "user_state",
                 "type": "STRING",
-                "description": "The state specified in the user's account settings. Location scope is required to see this value. ",
+                "description": "The state specified in the user's account settings. Location scope is required to see this value. "
             },
             {
                 "name": "user_country",
                 "type": "STRING",
-                "description": "The country specified in the user's account settings. Location scope is required to see this value.",
+                "description": "The country specified in the user's account settings. Location scope is required to see this value."
             },
             {
                 "name": "user_date_of_birth",
                 "type": "DATE",
-                "description": "The birthday date specified in the user's account settings.",
+                "description": "The birthday date specified in the user's account settings."
             },
             {
                 "name": "user_display_name",
                 "type": "STRING",
-                "description": "The name shown when the user's friends look at their Fitbit profile, send a message, or other interactions within the Friends section of the Fitbit app or fitbit.com dashboard, such as challenges.",
+                "description": "The name shown when the user's friends look at their Fitbit profile, send a message, or other interactions within the Friends section of the Fitbit app or fitbit.com dashboard, such as challenges."
             },
             {
                 "name": "user_encoded_id",
                 "type": "STRING",
-                "description": "The encoded ID of the user. Use '-' (dash) for current logged-in user.",
+                "description": "The encoded ID of the user. Use '-' (dash) for current logged-in user."
             },
             {
                 "name": "user_full_name",
                 "type": "STRING",
-                "description": "The full name value specified in the user's account settings.",
+                "description": "The full name value specified in the user's account settings."
             },
             {
                 "name": "user_gender",
                 "type": "STRING",
-                "description": "The user's specified gender.",
+                "description": "The user's specified gender."
             },
             {
                 "name": "user_height",
                 "type": "FLOAT",
-                "description": "The height value specified in the user's account settings.",
+                "description": "The height value specified in the user's account settings."
             },
             {
                 "name": "user_height_unit",
                 "type": "STRING",
-                "description": "The unit system defined in the user's account settings. See Localization.",
+                "description": "The unit system defined in the user's account settings. See Localization."
             },
             {
                 "name": "user_timezone",
                 "type": "STRING",
-                "description": "The timezone defined in the user's account settings.",
+                "description": "The timezone defined in the user's account settings."
             },
-            {"name": "surgery_date", "type": "DATE"},
+            {"name": "surgery_date", "type": "DATE"}
         ],
     )
