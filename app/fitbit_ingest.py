@@ -1740,30 +1740,30 @@ def fitbit_intraday_scope():
         if fitbit_bp.session.token:
             del fitbit_bp.session.token
 
-        try:
+#        try:
 
-            resp = fitbit.get(
-                "/1/user/-/activities/steps/date/"
-                + date_pulled
-                + "/1d/1min.json"
-            )
+        resp = fitbit.get(
+            "/1/user/-/activities/steps/date/"
+            + date_pulled
+            + "/1d/1min.json"
+        )
 
-            log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
+        log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
 
-            intraday_steps = resp.json()["activities-steps-intraday"]["dataset"]
-            intraday_steps_df = pd.json_normalize(intraday_steps)
-            intraday_steps_columns = ["time", "value"]
-            intraday_steps_df = _normalize_response(
-                intraday_steps_df, intraday_steps_columns, user, date_pulled
-            )
-            intraday_steps_df["date_time"] = pd.to_datetime(
-                date_pulled + " " + intraday_steps_df["time"]
-            )
-            intraday_steps_df = intraday_steps_df.drop(["time"], axis=1)
-            intraday_steps_list.append(intraday_steps_df)
+        intraday_steps = resp.json()["activities-steps-intraday"]["dataset"]
+        intraday_steps_df = pd.json_normalize(intraday_steps)
+        intraday_steps_columns = ["time", "value"]
+        intraday_steps_df = _normalize_response(
+            intraday_steps_df, intraday_steps_columns, user, date_pulled
+        )
+        intraday_steps_df["date_time"] = pd.to_datetime(
+            date_pulled + " " + intraday_steps_df["time"]
+        )
+        intraday_steps_df = intraday_steps_df.drop(["time"], axis=1)
+        intraday_steps_list.append(intraday_steps_df)
 
-        except (Exception) as e:
-            log.error("exception occured: %s", str(e))
+#        except (Exception) as e:
+#            log.error("exception occured: %s", str(e))
 
         try:
             #
