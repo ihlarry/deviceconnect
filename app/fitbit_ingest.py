@@ -1749,7 +1749,7 @@ def fitbit_intraday_scope():
         )
 
         log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
-
+        print(resp.json())
         intraday_steps = resp.json()["activities-steps-intraday"]["dataset"]
         intraday_steps_df = pd.json_normalize(intraday_steps)
         intraday_steps_columns = ["time", "value"]
