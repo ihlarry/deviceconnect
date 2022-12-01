@@ -1761,6 +1761,8 @@ def fitbit_intraday_scope():
         )
         intraday_steps_df = intraday_steps_df.drop(["time"], axis=1)
         intraday_steps_list.append(intraday_steps_df)
+        print("steps list")
+        print(intraday_steps_list)
 
 #        except (Exception) as e:
 #            log.error("exception occured: %s", str(e))
@@ -1891,42 +1893,42 @@ def fitbit_intraday_scope():
 
     if len(intraday_steps_list) > 0:
 
-        try:
+#        try:
 
-            bulk_intraday_steps_df = pd.concat(intraday_steps_list, axis=0)
+        bulk_intraday_steps_df = pd.concat(intraday_steps_list, axis=0)
 
-            pandas_gbq.to_gbq(
-                dataframe=bulk_intraday_steps_df,
-                destination_table=_tablename("intraday_steps"),
-                project_id=project_id,
-                if_exists="append",
-                table_schema=[
-                    {
-                        "name": "id",
-                        "type": "STRING",
-                        "mode": "REQUIRED",
-                        "description": "Primary Key",
-                    },
-                    {
-                        "name": "date",
-                        "type": "DATE",
-                        "mode": "REQUIRED",
-                        "description": "The date values were extracted",
-                    },
-                    {
-                        "name": "value",
-                        "type": "INTEGER",
-                        "description": "Number of steps at this time",
-                    },
-                    {
-                        "name": "date_time",
-                        "type": "TIMESTAMP",
-                        "description": "Time of day",
-                    },
-                ],
-            )
-        except (Exception) as e:
-            log.error("exception occured: %s", str(e))
+        pandas_gbq.to_gbq(
+            dataframe=bulk_intraday_steps_df,
+            destination_table=_tablename("intraday_steps"),
+            project_id=project_id,
+            if_exists="append",
+            table_schema=[
+                {
+                    "name": "id",
+                    "type": "STRING",
+                    "mode": "REQUIRED",
+                    "description": "Primary Key",
+                },
+                {
+                    "name": "date",
+                    "type": "DATE",
+                    "mode": "REQUIRED",
+                    "description": "The date values were extracted",
+                },
+                {
+                    "name": "value",
+                    "type": "INTEGER",
+                    "description": "Number of steps at this time",
+                },
+                {
+                    "name": "date_time",
+                    "type": "TIMESTAMP",
+                    "description": "Time of day",
+                },
+            ],
+        )
+#        except (Exception) as e:
+#            log.error("exception occured: %s", str(e))
 
     if len(intraday_calories_list) > 0:
 
