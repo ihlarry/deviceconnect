@@ -100,37 +100,37 @@ def ingest():
 
     for x in allusers:
 
- #       try:
+        try:
 
-        log.debug("user = " + x)
+            log.debug("user = " + x)
 
-        fitbit_bp.storage.user = x
-        if fitbit_bp.session.token:
-            del fitbit_bp.session.token
+            fitbit_bp.storage.user = x
+            if fitbit_bp.session.token:
+                del fitbit_bp.session.token
 
-        token = fitbit_bp.token
+            token = fitbit_bp.token
 
-        log.debug("access token: " + token["access_token"])
-        log.debug("refresh_token: " + token["refresh_token"])
-        log.debug("expiration time " + str(token["expires_at"]))
-        log.debug("             in " + str(token["expires_in"]))
+            log.debug("access token: " + token["access_token"])
+            log.debug("refresh_token: " + token["refresh_token"])
+            log.debug("expiration time " + str(token["expires_at"]))
+            log.debug("             in " + str(token["expires_in"]))
 
-        resp = fitbit.get("/1/user/-/profile.json")
+            resp = fitbit.get("/1/user/-/profile.json")
 
-        log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
+            log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
 
-        j = resp.json()
+            j = resp.json()
 
-        log.debug(f"retrieved profile: {resp.reason}")
-        log.debug(
-            f"{x}: {j['user']['fullName']} ({j['user']['gender']}/{j['user']['age']})"
-        )
-        result.append(
-            f"{x}: {j['user']['fullName']} ({j['user']['gender']}/{j['user']['age']})"
-        )
+            log.debug(f"retrieved profile: {resp.reason}")
+            log.debug(
+                f"{x}: {j['user']['fullName']} ({j['user']['gender']}/{j['user']['age']})"
+            )
+            result.append(
+                f"{x}: {j['user']['fullName']} ({j['user']['gender']}/{j['user']['age']})"
+            )
 
-#        except (Exception) as e:
-#            log.error("exception occured: %s", str(e))
+        except (Exception) as e:
+            log.error("exception occured: %s", str(e))
 
     return str(result)
 
@@ -1718,6 +1718,8 @@ def fitbit_intraday_scope():
     # if caller provided date as query params, use that otherwise use yesterday
     date_pulled = request.args.get("date", _date_pulled())
     user_list = fitbit_bp.storage.all_users()
+    print("user_list")
+    print(user_list)
     if request.args.get("user") in user_list:
         user_list = [request.args.get("user")]
 
