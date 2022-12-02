@@ -1790,32 +1790,32 @@ def fitbit_intraday_scope():
         except (Exception) as e:
             log.error("exception occured: %s", str(e))
 
-#        try:
-        # DISTANCE
-        resp = fitbit.get(
-            "/1/user/-/activities/distance/date/"
-            + date_pulled
-            + "/1d/1min.json"
-        )
+        try:
+            # DISTANCE
+            resp = fitbit.get(
+                "/1/user/-/activities/distance/date/"
+                + date_pulled
+                + "/1d/1min.json"
+            )
 
-        log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
+            log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
 
-        intraday_distance = resp.json()["activities-distance"]
-        intraday_distance_df = pd.json_normalize(intraday_distance)
-        intraday_distance_columns = ["time", "value"]
-        intraday_distance_df = _normalize_response(
-            intraday_distance_df,
-            intraday_distance_columns,
-            user,
-            date_pulled,
-        )
-        print(intraday_distance_df.to_string())
-        intraday_distance_df["date_time"] = datetime.now()
-        intraday_distance_df = intraday_distance_df.drop(["time"], axis=1)
-        intraday_distance_list.append(intraday_distance_df)
+            intraday_distance = resp.json()["activities-distance"]
+            intraday_distance_df = pd.json_normalize(intraday_distance)
+            intraday_distance_columns = ["time", "value"]
+            intraday_distance_df = _normalize_response(
+                intraday_distance_df,
+                intraday_distance_columns,
+                user,
+                date_pulled,
+            )
+            intraday_distance_df["date_time"] = datetime.now()
+            intraday_distance_df = intraday_distance_df.drop(["time"], axis=1)
+            intraday_distance_df["value"] = pd.to_numeric(intraday_distance_df["value"])
+            intraday_distance_list.append(intraday_distance_df)
 
-#        except (Exception) as e:
-#            log.error("exception occured: %s", str(e))
+        except (Exception) as e:
+            log.error("exception occured: %s", str(e))
 
         try:
             # ELEVATION
@@ -1827,9 +1827,7 @@ def fitbit_intraday_scope():
 
             log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
 
-            intraday_elevation = resp.json()["activities-elevation-intraday"][
-                "dataset"
-            ]
+            intraday_elevation = resp.json()["activities-elevation"]
             intraday_elevation_df = pd.json_normalize(intraday_elevation)
             intraday_elevation_columns = ["time", "value"]
             intraday_elevation_df = _normalize_response(
@@ -1838,10 +1836,9 @@ def fitbit_intraday_scope():
                 user,
                 date_pulled,
             )
-            intraday_elevation_df["date_time"] = pd.to_datetime(
-                date_pulled + " " + intraday_elevation_df["time"]
-            )
+            intraday_elevation_df["date_time"] = datetime.now()
             intraday_elevation_df = intraday_elevation_df.drop(["time"], axis=1)
+            intraday_elevation_df["value"] = pd.to_numeric(intraday_elevation_df["value"])
             intraday_elevation_list.append(intraday_elevation_df)
 
         except (Exception) as e:
@@ -1976,7 +1973,7 @@ def fitbit_intraday_scope():
 
             pandas_gbq.to_gbq(
                 dataframe=bulk_intraday_distance_df,
-                destination_table=_tablename("intraday_distances"),
+                destination_table=_tablename("intraday_distance"),
                 project_id=project_id,
                 if_exists="append",
                 table_schema=[
