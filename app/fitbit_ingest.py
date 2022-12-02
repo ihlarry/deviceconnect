@@ -1809,6 +1809,7 @@ def fitbit_intraday_scope():
             user,
             date_pulled,
         )
+        print(intraday_distance_df.to_string())
         intraday_distance_df["date_time"] = datetime.now()
         intraday_distance_df = intraday_distance_df.drop(["time"], axis=1)
         intraday_distance_list.append(intraday_distance_df)
