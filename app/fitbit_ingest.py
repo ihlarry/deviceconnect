@@ -1719,8 +1719,6 @@ def fitbit_intraday_scope():
     # if caller provided date as query params, use that otherwise use yesterday
     date_pulled = request.args.get("date", _date_pulled())
     user_list = fitbit_bp.storage.all_users()
-    print("user_list")
-    print(user_list)
     if request.args.get("user") in user_list:
         user_list = [request.args.get("user")]
 
@@ -1741,70 +1739,56 @@ def fitbit_intraday_scope():
         if fitbit_bp.session.token:
             del fitbit_bp.session.token
 
-#        try:
-
-        resp = fitbit.get(
-            "/1/user/-/activities/steps/date/"
-            + date_pulled
-            + "/1d/1min.json"
-        )
-
-        log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
-        print(resp.json())
-        intraday_steps = resp.json()["activities-steps"]
-        print("intraday_steps")
-        print(intraday_steps)
-        intraday_steps_df = pd.json_normalize(intraday_steps)
-        print(intraday_steps_df.to_string())
-        intraday_steps_columns = ["time","value"]
-        intraday_steps_df = _normalize_response(
-            intraday_steps_df, intraday_steps_columns, user, date_pulled
-        )
-#        intraday_steps_df["date_time"] = pd.to_datetime(
-#            date_pulled + " " + intraday_steps_df["time"]
-#        )
-        intraday_steps_df["date_time"] = datetime.now()
-        print("step df")
-        print(intraday_steps_df.to_string())
-        intraday_steps_df = intraday_steps_df.drop(["time"], axis=1)
-        intraday_steps_df["value"] = pd.to_numeric(intraday_steps_df["value"])
-        intraday_steps_list.append(intraday_steps_df)
-        print("steps list")
-        print(intraday_steps_list)
-
-#        except (Exception) as e:
-#            log.error("exception occured: %s", str(e))
-
         try:
-            #
-            # CALORIES
+
             resp = fitbit.get(
-                "/1/user/-/activities/calories/date/"
+                "/1/user/-/activities/steps/date/"
                 + date_pulled
                 + "/1d/1min.json"
             )
 
             log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
-
-            intraday_calories = resp.json()["activities-calories-intraday"][
-                "dataset"
-            ]
-            intraday_calories_df = pd.json_normalize(intraday_calories)
-            intraday_calories_columns = ["level", "mets", "time", "value"]
-            intraday_calories_df = _normalize_response(
-                intraday_calories_df,
-                intraday_calories_columns,
-                user,
-                date_pulled,
+            intraday_steps = resp.json()["activities-steps"]
+            intraday_steps_df = pd.json_normalize(intraday_steps)
+            intraday_steps_columns = ["time","value"]
+            intraday_steps_df = _normalize_response(
+                intraday_steps_df, intraday_steps_columns, user, date_pulled
             )
-            intraday_calories_df["date_time"] = pd.to_datetime(
-                date_pulled + " " + intraday_calories_df["time"]
-            )
-            intraday_calories_df = intraday_calories_df.drop(["time"], axis=1)
-            intraday_calories_list.append(intraday_calories_df)
+            intraday_steps_df["date_time"] = datetime.now()
+            intraday_steps_df = intraday_steps_df.drop(["time"], axis=1)
+            intraday_steps_df["value"] = pd.to_numeric(intraday_steps_df["value"])
+            intraday_steps_list.append(intraday_steps_df)
 
         except (Exception) as e:
             log.error("exception occured: %s", str(e))
+
+#        try:
+            #
+            # CALORIES
+        resp = fitbit.get(
+            "/1/user/-/activities/calories/date/"
+            + date_pulled
+            + "/1d/1min.json"
+        )
+
+        log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
+
+        intraday_calories = resp.json()["activities-calories"]
+        intraday_calories_df = pd.json_normalize(intraday_calories)
+        intraday_calories_columns = ["level", "mets", "time", "value"]
+        intraday_calories_df = _normalize_response(
+            intraday_calories_df,
+            intraday_calories_columns,
+            user,
+            date_pulled,
+        )
+        intraday_calories_df["date_time"] = datetime.now()
+        intraday_calories_df = intraday_calories_df.drop(["time"], axis=1)
+        intraday_calories_df["value"] = pd.to_numeric(intraday_calories_df["value"])
+        intraday_calories_list.append(intraday_calories_df)
+
+#        except (Exception) as e:
+#            log.error("exception occured: %s", str(e))
 
         try:
             # DISTANCE
