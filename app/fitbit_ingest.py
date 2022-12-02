@@ -1790,31 +1790,31 @@ def fitbit_intraday_scope():
         except (Exception) as e:
             log.error("exception occured: %s", str(e))
 
-        try:
-            # DISTANCE
-            resp = fitbit.get(
-                "/1/user/-/activities/distance/date/"
-                + date_pulled
-                + "/1d/1min.json"
-            )
+#        try:
+        # DISTANCE
+        resp = fitbit.get(
+            "/1/user/-/activities/distance/date/"
+            + date_pulled
+            + "/1d/1min.json"
+        )
 
-            log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
+        log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
 
-            intraday_distance = resp.json()["activities-distance"]
-            intraday_distance_df = pd.json_normalize(intraday_distance)
-            intraday_distance_columns = ["time", "value"]
-            intraday_distance_df = _normalize_response(
-                intraday_distance_df,
-                intraday_distance_columns,
-                user,
-                date_pulled,
-            )
-            intraday_distance_df["date_time"] = datetime.now()
-            intraday_distance_df = intraday_distance_df.drop(["time"], axis=1)
-            intraday_distance_list.append(intraday_distance_df)
+        intraday_distance = resp.json()["activities-distance"]
+        intraday_distance_df = pd.json_normalize(intraday_distance)
+        intraday_distance_columns = ["time", "value"]
+        intraday_distance_df = _normalize_response(
+            intraday_distance_df,
+            intraday_distance_columns,
+            user,
+            date_pulled,
+        )
+        intraday_distance_df["date_time"] = datetime.now()
+        intraday_distance_df = intraday_distance_df.drop(["time"], axis=1)
+        intraday_distance_list.append(intraday_distance_df)
 
-        except (Exception) as e:
-            log.error("exception occured: %s", str(e))
+#        except (Exception) as e:
+#            log.error("exception occured: %s", str(e))
 
         try:
             # ELEVATION
