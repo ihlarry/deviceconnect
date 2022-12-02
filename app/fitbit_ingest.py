@@ -1854,18 +1854,15 @@ def fitbit_intraday_scope():
 
             log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
 
-            intraday_floors = resp.json()["activities-floors-intraday"][
-                "dataset"
-            ]
+            intraday_floors = resp.json()["activities-floors"]
             intraday_floors_df = pd.json_normalize(intraday_floors)
             intraday_floors_columns = ["time", "value"]
             intraday_floors_df = _normalize_response(
                 intraday_floors_df, intraday_floors_columns, user, date_pulled
             )
-            intraday_floors_df["date_time"] = pd.to_datetime(
-                date_pulled + " " + intraday_floors_df["time"]
-            )
+            intraday_floors_df["date_time"] = datetime.now()
             intraday_floors_df = intraday_floors_df.drop(["time"], axis=1)
+            intraday_floors_df["value"] = pd.to_numeric(intraday_floors_df["value"])
             intraday_floors_list.append(intraday_floors_df)
 
         except (Exception) as e:
@@ -1879,42 +1876,42 @@ def fitbit_intraday_scope():
 
     if len(intraday_steps_list) > 0:
 
-#        try:
+        try:
 
-        bulk_intraday_steps_df = pd.concat(intraday_steps_list, axis=0)
+            bulk_intraday_steps_df = pd.concat(intraday_steps_list, axis=0)
 
-        pandas_gbq.to_gbq(
-            dataframe=bulk_intraday_steps_df,
-            destination_table=_tablename("intraday_steps"),
-            project_id=project_id,
-            if_exists="append",
-            table_schema=[
-                {
-                    "name": "id",
-                    "type": "STRING",
-                    "mode": "REQUIRED",
-                    "description": "Primary Key",
-                },
-                {
-                    "name": "date",
-                    "type": "DATE",
-                    "mode": "REQUIRED",
-                    "description": "The date values were extracted",
-                },
-                {
-                    "name": "value",
-                    "type": "INTEGER",
-                    "description": "Number of steps at this time",
-                },
-                {
-                    "name": "date_time",
-                    "type": "TIMESTAMP",
-                    "description": "Time of day",
-                },
-            ],
-        )
-#        except (Exception) as e:
-#            log.error("exception occured: %s", str(e))
+            pandas_gbq.to_gbq(
+                dataframe=bulk_intraday_steps_df,
+                destination_table=_tablename("intraday_steps"),
+                project_id=project_id,
+                if_exists="append",
+                table_schema=[
+                    {
+                        "name": "id",
+                        "type": "STRING",
+                        "mode": "REQUIRED",
+                        "description": "Primary Key",
+                    },
+                    {
+                        "name": "date",
+                        "type": "DATE",
+                        "mode": "REQUIRED",
+                        "description": "The date values were extracted",
+                    },
+                    {
+                        "name": "value",
+                        "type": "INTEGER",
+                        "description": "Number of steps at this time",
+                    },
+                    {
+                        "name": "date_time",
+                        "type": "TIMESTAMP",
+                        "description": "Time of day",
+                    },
+                ],
+            )
+        except (Exception) as e:
+            log.error("exception occured: %s", str(e))
 
     if len(intraday_calories_list) > 0:
 
