@@ -62,6 +62,7 @@ Notes:
 """
 
 import os
+import json
 import timeit
 from datetime import date, datetime, timedelta
 import logging
@@ -1750,7 +1751,7 @@ def fitbit_intraday_scope():
 
         log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
         print(resp.json())
-        intraday_steps = resp.json()["activities-steps"]
+        intraday_steps = json.loads(resp.json()["activities-steps"])
         print("intraday_steps")
         print(intraday_steps)
         intraday_steps_df = pd.json_normalize(intraday_steps)
