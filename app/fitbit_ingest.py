@@ -1767,7 +1767,7 @@ def fitbit_intraday_scope():
         print("step df")
         print(intraday_steps_df.to_string())
         intraday_steps_df = intraday_steps_df.drop(["time"], axis=1)
-        intraday_steps_df["value"] = intraday_steps_df["value"].apply(intraday_steps_df.to_numeric)
+        intraday_steps_df["value"] = pd.to_numeric(intraday_steps_df["value"])
         intraday_steps_list.append(intraday_steps_df)
         print("steps list")
         print(intraday_steps_list)
