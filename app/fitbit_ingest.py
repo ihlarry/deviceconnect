@@ -1782,7 +1782,7 @@ def fitbit_intraday_scope():
             user,
             date_pulled,
         )
-        print(intraday_calories.to_string())
+        print(intraday_calories_df.to_string())
         intraday_calories_df["date_time"] = datetime.now()
         intraday_calories_df = intraday_calories_df.drop(["time"], axis=1)
         intraday_calories_df["value"] = pd.to_numeric(intraday_calories_df["value"])
