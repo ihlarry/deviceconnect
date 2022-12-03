@@ -1552,98 +1552,98 @@ def fitbit_activity_scope():
 
     if len(activity_summary_list) > 0:
 
-        try:
+ #       try:
 
-            bulk_activity_summary_df = pd.concat(activity_summary_list, axis=0)
+        bulk_activity_summary_df = pd.concat(activity_summary_list, axis=0)
 
-            pandas_gbq.to_gbq(
-                dataframe=bulk_activity_summary_df,
-                destination_table=_tablename("activity_summary"),
-                project_id=project_id,
-                if_exists="append",
-                table_schema=[
-                    {
-                        "name": "id",
-                        "type": "STRING",
-                        "mode": "REQUIRED",
-                        "description": "Primary Key",
-                    },
-                    {
-                        "name": "date",
-                        "type": "DATE",
-                        "mode": "REQUIRED",
-                        "description": "The date values were extracted",
-                    },
-                    {
-                        "name": "activity_score",
-                        "type": "INTEGER",
-                        "description": "No Description",
-                    },
-                    {
-                        "name": "activity_calories",
-                        "type": "INTEGER",
-                        "description": "The number of calories burned for the day during periods the user was active above sedentary level. This includes both activity burned calories and BMR.",
-                    },
-                    {
-                        "name": "calories_bmr",
-                        "type": "INTEGER",
-                        "description": "Total BMR calories burned for the day.",
-                    },
-                    {
-                        "name": "calories_out",
-                        "type": "INTEGER",
-                        "description": "Total calories burned for the day (daily timeseries total).",
-                    },
-                    {
-                        "name": "elevation",
-                        "type": "INTEGER",
-                        "description": "The elevation traveled for the day.",
-                    },
-                    {
-                        "name": "fairly_active_minutes",
-                        "type": "INTEGER",
-                        "description": "Total minutes the user was fairly/moderately active.",
-                    },
-                    {
-                        "name": "floors",
-                        "type": "INTEGER",
-                        "description": "The equivalent floors climbed for the day.",
-                    },
-                    {
-                        "name": "lightly_active_minutes",
-                        "type": "INTEGER",
-                        "description": "	Total minutes the user was lightly active.",
-                    },
-                    {
-                        "name": "marginal_calories",
-                        "type": "INTEGER",
-                        "description": "Total marginal estimated calories burned for the day.",
-                    },
-                    {
-                        "name": "resting_heart_rate",
-                        "type": "INTEGER",
-                        "description": "The resting heart rate for the day",
-                    },
-                    {
-                        "name": "sedentary_minutes",
-                        "type": "INTEGER",
-                        "description": "Total minutes the user was sedentary.",
-                    },
-                    {
-                        "name": "very_active_minutes",
-                        "type": "INTEGER",
-                        "description": "Total minutes the user was very active.",
-                    },
-                    {
-                        "name": "steps",
-                        "type": "INTEGER",
-                        "description": "Total steps taken for the day.",
-                    },
-                ],
-            )
+        pandas_gbq.to_gbq(
+            dataframe=bulk_activity_summary_df,
+            destination_table=_tablename("activity_summary"),
+            project_id=project_id,
+            if_exists="append",
+            table_schema=[
+                {
+                    "name": "id",
+                    "type": "STRING",
+                    "mode": "REQUIRED",
+                    "description": "Primary Key",
+                },
+                {
+                    "name": "date",
+                    "type": "DATE",
+                    "mode": "REQUIRED",
+                    "description": "The date values were extracted",
+                },
+                {
+                    "name": "activity_score",
+                    "type": "INTEGER",
+                    "description": "No Description",
+                },
+                {
+                    "name": "activity_calories",
+                    "type": "INTEGER",
+                    "description": "The number of calories burned for the day during periods the user was active above sedentary level. This includes both activity burned calories and BMR.",
+                },
+                {
+                    "name": "calories_bmr",
+                    "type": "INTEGER",
+                    "description": "Total BMR calories burned for the day.",
+                },
+                {
+                    "name": "calories_out",
+                    "type": "INTEGER",
+                    "description": "Total calories burned for the day (daily timeseries total).",
+                },
+                {
+                    "name": "elevation",
+                    "type": "INTEGER",
+                    "description": "The elevation traveled for the day.",
+                },
+                {
+                    "name": "fairly_active_minutes",
+                    "type": "INTEGER",
+                    "description": "Total minutes the user was fairly/moderately active.",
+                },
+                {
+                    "name": "floors",
+                    "type": "INTEGER",
+                    "description": "The equivalent floors climbed for the day.",
+                },
+                {
+                    "name": "lightly_active_minutes",
+                    "type": "INTEGER",
+                    "description": "	Total minutes the user was lightly active.",
+                },
+                {
+                    "name": "marginal_calories",
+                    "type": "INTEGER",
+                    "description": "Total marginal estimated calories burned for the day.",
+                },
+                {
+                    "name": "resting_heart_rate",
+                    "type": "INTEGER",
+                    "description": "The resting heart rate for the day",
+                },
+                {
+                    "name": "sedentary_minutes",
+                    "type": "INTEGER",
+                    "description": "Total minutes the user was sedentary.",
+                },
+                {
+                    "name": "very_active_minutes",
+                    "type": "INTEGER",
+                    "description": "Total minutes the user was very active.",
+                },
+                {
+                    "name": "steps",
+                    "type": "INTEGER",
+                    "description": "Total steps taken for the day.",
+                },
+            ],
+        )
 
-        except (Exception) as e:
-            log.error("exception occured: %s", str(e))
+#        except (Exception) as e:
+#            log.error("exception occured: %s", str(e))
 
     if len(activity_goals_list) > 0:
 
