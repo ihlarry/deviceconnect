@@ -1419,7 +1419,7 @@ def fitbit_activity_scope():
             pass
 
         activity_summary_columns = [
-            "activeScore",
+            "activityScore",
             "activityCalories",
             "caloriesBMR",
             "caloriesOut",
@@ -1437,7 +1437,6 @@ def fitbit_activity_scope():
         activity_summary_df = _normalize_response(
             activity_summary_df, activity_summary_columns, user, date_pulled
         )
-
         # Append dfs to df list
         print(activity_summary_df.to_string())
         activities_list.append(activities_df)
