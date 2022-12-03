@@ -1430,8 +1430,8 @@ def fitbit_activity_scope():
             "marginalCalories",
             "restingHeartRate",
             "sedentaryMinutes",
-            "steps",
             "veryActiveMinutes"
+            "steps"
         ]
 
         activity_summary_df = _normalize_response(
