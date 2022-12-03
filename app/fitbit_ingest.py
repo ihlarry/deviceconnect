@@ -1430,7 +1430,7 @@ def fitbit_activity_scope():
             "marginalCalories",
             "restingHeartRate",
             "sedentaryMinutes",
-            "veryActiveMinutes"
+            "veryActiveMinutes",
             "steps"
         ]
 
