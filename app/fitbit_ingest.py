@@ -1410,6 +1410,7 @@ def fitbit_activity_scope():
         )
 
         activity_summary_df = pd.json_normalize(activity_summary)
+        print(activity_summary_df.to_string())
         try:
             activity_summary_df = activity_summary_df.drop(
                 ["distances", "heartRateZones"], axis=1
@@ -1430,7 +1431,7 @@ def fitbit_activity_scope():
             "restingHeartRate",
             "sedentaryMinutes",
             "steps",
-            "veryActiveMinutes",
+            "veryActiveMinutes"
         ]
 
         activity_summary_df = _normalize_response(
@@ -1438,6 +1439,7 @@ def fitbit_activity_scope():
         )
 
         # Append dfs to df list
+        print(activity_summary_df.to_string())
         activities_list.append(activities_df)
         activity_summary_list.append(activity_summary_df)
         activity_goals_list.append(activity_goals_df)
