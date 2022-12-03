@@ -1419,7 +1419,7 @@ def fitbit_activity_scope():
             pass
 
         activity_summary_columns = [
-            "activityScore",
+            "acttiveScore",
             "activityCalories",
             "caloriesBMR",
             "caloriesOut",
@@ -1576,7 +1576,7 @@ def fitbit_activity_scope():
                     "description": "The date values were extracted",
                 },
                 {
-                    "name": "activity_score",
+                    "name": "active_score",
                     "type": "INTEGER",
                     "description": "No Description",
                 },
