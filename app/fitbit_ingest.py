@@ -1278,20 +1278,18 @@ def fitbit_heart_rate_scope():
                     {
                         "name": "id",
                         "type": "STRING",
-                        "description": "Primary Key",
+                        "mode": "REQUIRED",
+                        "description": "Primary Key"
                     },
                     {
                         "name": "date",
                         "type": "DATE",
-                        "description": "The date values were extracted",
+                        "mode": "REQUIRED",
+                        "description": "The date values were extracted"
                     },
                     {
-#                        "name": "datetime",
-#                        "type": "TIMESTAMP",
-#                    },
-                    {
                         "name": "value",
-                        "type": "INTEGER",
+                        "type": "INTEGER"
                     },
                     {
                         "name": "date_time",
