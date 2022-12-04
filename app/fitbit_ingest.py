@@ -1000,120 +1000,121 @@ def fitbit_heart_rate_scope():
         if fitbit_bp.session.token:
             del fitbit_bp.session.token
 
-        try:
+#        try:
 
-            resp = fitbit.get(
-                "1/user/-/activities/heart/date/" + date_pulled + "/1d.json"
-            )
+        resp = fitbit.get(
+            "1/user/-/activities/heart/date/" + date_pulled + "/1d.json"
+        )
 
-            log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
+        log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
 
-            hr_zones = resp.json()["activities-heart"][0]["value"]
-            zone_list = ["Out of Range", "Fat Burn", "Cardio", "Peak"]
-            hr_zones_columns = [
-                "out_of_range_calories_out",
-                "out_of_range_minutes",
-                "out_of_range_min_hr",
-                "out_of_range_max_hr",
-                "fat_burn_calories_out",
-                "fat_burn_minutes",
-                "fat_burn_min_hr",
-                "fat_burn_max_hr",
-                "cardio_calories_out",
-                "cardio_minutes",
-                "cardio_min_hr",
-                "cardio_max_hr",
-                "peak_calories_out",
-                "peak_minutes",
-                "peak_min_hr",
-                "peak_max_hr",
-            ]
-            hr_zones_df = pd.json_normalize(hr_zones)
+        hr_zones = resp.json()["activities-heart"][0]["value"]
+        zone_list = ["Out of Range", "Fat Burn", "Cardio", "Peak"]
+        hr_zones_columns = [
+            "out_of_range_calories_out",
+            "out_of_range_minutes",
+            "out_of_range_min_hr",
+            "out_of_range_max_hr",
+            "fat_burn_calories_out",
+            "fat_burn_minutes",
+            "fat_burn_min_hr",
+            "fat_burn_max_hr",
+            "cardio_calories_out",
+            "cardio_minutes",
+            "cardio_min_hr",
+            "cardio_max_hr",
+            "peak_calories_out",
+            "peak_minutes",
+            "peak_min_hr",
+            "peak_max_hr",
+        ]
+        hr_zones_df = pd.json_normalize(hr_zones)
 
-            user_activity_zone = pd.DataFrame(
-                {
-                    hr_zones["heartRateZones"][0]["name"]
-                    .replace(" ", "_")
-                    .lower()
-                    + "_calories_out": hr_zones["heartRateZones"][0][
-                        "caloriesOut"
-                    ],
-                    hr_zones["heartRateZones"][0]["name"]
-                    .replace(" ", "_")
-                    .lower()
-                    + "_minutes": hr_zones["heartRateZones"][0]["minutes"],
-                    hr_zones["heartRateZones"][0]["name"]
-                    .replace(" ", "_")
-                    .lower()
-                    + "_min_hr": hr_zones["heartRateZones"][0]["min"],
-                    hr_zones["heartRateZones"][0]["name"]
-                    .replace(" ", "_")
-                    .lower()
-                    + "_max_hr": hr_zones["heartRateZones"][0]["max"],
-                    hr_zones["heartRateZones"][1]["name"]
-                    .replace(" ", "_")
-                    .lower()
-                    + "_calories_out": hr_zones["heartRateZones"][1][
-                        "caloriesOut"
-                    ],
-                    hr_zones["heartRateZones"][1]["name"]
-                    .replace(" ", "_")
-                    .lower()
-                    + "_minutes": hr_zones["heartRateZones"][1]["minutes"],
-                    hr_zones["heartRateZones"][1]["name"]
-                    .replace(" ", "_")
-                    .lower()
-                    + "_min_hr": hr_zones["heartRateZones"][1]["min"],
-                    hr_zones["heartRateZones"][1]["name"]
-                    .replace(" ", "_")
-                    .lower()
-                    + "_max_hr": hr_zones["heartRateZones"][1]["max"],
-                    hr_zones["heartRateZones"][2]["name"]
-                    .replace(" ", "_")
-                    .lower()
-                    + "_calories_out": hr_zones["heartRateZones"][2][
-                        "caloriesOut"
-                    ],
-                    hr_zones["heartRateZones"][2]["name"]
-                    .replace(" ", "_")
-                    .lower()
-                    + "_minutes": hr_zones["heartRateZones"][2]["minutes"],
-                    hr_zones["heartRateZones"][2]["name"]
-                    .replace(" ", "_")
-                    .lower()
-                    + "_min_hr": hr_zones["heartRateZones"][2]["min"],
-                    hr_zones["heartRateZones"][2]["name"]
-                    .replace(" ", "_")
-                    .lower()
-                    + "_max_hr": hr_zones["heartRateZones"][2]["max"],
-                    hr_zones["heartRateZones"][3]["name"]
-                    .replace(" ", "_")
-                    .lower()
-                    + "_calories_out": hr_zones["heartRateZones"][3][
-                        "caloriesOut"
-                    ],
-                    hr_zones["heartRateZones"][3]["name"]
-                    .replace(" ", "_")
-                    .lower()
-                    + "_minutes": hr_zones["heartRateZones"][3]["minutes"],
-                    hr_zones["heartRateZones"][3]["name"]
-                    .replace(" ", "_")
-                    .lower()
-                    + "_min_hr": hr_zones["heartRateZones"][3]["min"],
-                    hr_zones["heartRateZones"][3]["name"]
-                    .replace(" ", "_")
-                    .lower()
-                    + "_max_hr": hr_zones["heartRateZones"][3]["max"],
-                },
-                index=[0],
-            )
+        user_activity_zone = pd.DataFrame(
+            {
+                hr_zones["heartRateZones"][0]["name"]
+                .replace(" ", "_")
+                .lower()
+                + "_calories_out": hr_zones["heartRateZones"][0][
+                    "caloriesOut"
+                ],
+                hr_zones["heartRateZones"][0]["name"]
+                .replace(" ", "_")
+                .lower()
+                + "_minutes": hr_zones["heartRateZones"][0]["minutes"],
+                hr_zones["heartRateZones"][0]["name"]
+                .replace(" ", "_")
+                .lower()
+                + "_min_hr": hr_zones["heartRateZones"][0]["min"],
+                hr_zones["heartRateZones"][0]["name"]
+                .replace(" ", "_")
+                .lower()
+                + "_max_hr": hr_zones["heartRateZones"][0]["max"],
+                hr_zones["heartRateZones"][1]["name"]
+                .replace(" ", "_")
+                .lower()
+                + "_calories_out": hr_zones["heartRateZones"][1][
+                    "caloriesOut"
+                ],
+                hr_zones["heartRateZones"][1]["name"]
+                .replace(" ", "_")
+                .lower()
+                + "_minutes": hr_zones["heartRateZones"][1]["minutes"],
+                hr_zones["heartRateZones"][1]["name"]
+                .replace(" ", "_")
+                .lower()
+                + "_min_hr": hr_zones["heartRateZones"][1]["min"],
+                hr_zones["heartRateZones"][1]["name"]
+                .replace(" ", "_")
+                .lower()
+                + "_max_hr": hr_zones["heartRateZones"][1]["max"],
+                hr_zones["heartRateZones"][2]["name"]
+                .replace(" ", "_")
+                .lower()
+                + "_calories_out": hr_zones["heartRateZones"][2][
+                    "caloriesOut"
+                ],
+                hr_zones["heartRateZones"][2]["name"]
+                .replace(" ", "_")
+                .lower()
+                + "_minutes": hr_zones["heartRateZones"][2]["minutes"],
+                hr_zones["heartRateZones"][2]["name"]
+                .replace(" ", "_")
+                .lower()
+                + "_min_hr": hr_zones["heartRateZones"][2]["min"],
+                hr_zones["heartRateZones"][2]["name"]
+                .replace(" ", "_")
+                .lower()
+                + "_max_hr": hr_zones["heartRateZones"][2]["max"],
+                hr_zones["heartRateZones"][3]["name"]
+                .replace(" ", "_")
+                .lower()
+                + "_calories_out": hr_zones["heartRateZones"][3][
+                    "caloriesOut"
+                ],
+                hr_zones["heartRateZones"][3]["name"]
+                .replace(" ", "_")
+                .lower()
+                + "_minutes": hr_zones["heartRateZones"][3]["minutes"],
+                hr_zones["heartRateZones"][3]["name"]
+                .replace(" ", "_")
+                .lower()
+                + "_min_hr": hr_zones["heartRateZones"][3]["min"],
+                hr_zones["heartRateZones"][3]["name"]
+                .replace(" ", "_")
+                .lower()
+                + "_max_hr": hr_zones["heartRateZones"][3]["max"],
+            },
+            index=[0],
+        )
 
-            user_activity_zone.insert(0, "id", user)
-            user_activity_zone.insert(1, "date", date_pulled)
-            hr_zones_list.append(user_activity_zone)
+        user_activity_zone.insert(0, "id", user)
+        user_activity_zone.insert(1, "date", date_pulled)
+        user_activity_zone["date_time"] = datetime.now()
+        hr_zones_list.append(user_activity_zone)
 
-        except (Exception) as e:
-            log.error("exception occured: %s", str(e))
+#        except (Exception) as e:
+#            log.error("exception occured: %s", str(e))
 
         try:
 
@@ -1134,9 +1135,7 @@ def fitbit_heart_rate_scope():
             heart_rate_df = _normalize_response(
                 heart_rate_df, hr_columns, user, date_pulled
             )
-            heart_rate_df["datetime"] = pd.to_datetime(
-                heart_rate_df["date"] + " " + heart_rate_df["time"]
-            )
+            heart_rate_df["date_time"] = datetime.now()
             try:
                 heart_rate_df = heart_rate_df.drop(["time"], axis=1)
             except:
@@ -1287,14 +1286,17 @@ def fitbit_heart_rate_scope():
                         "description": "The date values were extracted",
                     },
                     {
-                        "name": "datetime",
-                        "type": "TIMESTAMP",
-                    },
+#                        "name": "datetime",
+#                        "type": "TIMESTAMP",
+#                    },
                     {
                         "name": "value",
                         "type": "INTEGER",
                     },
-                    {"name": "date_time", "type": "TIMESTAMP"},
+                    {
+                        "name": "date_time",
+                        "type": "TIMESTAMP"
+                    }
                 ],
             )
         except (Exception) as e:
@@ -1410,7 +1412,7 @@ def fitbit_activity_scope():
         )
 
         activity_summary_df = pd.json_normalize(activity_summary)
-        print(activity_summary_df.to_string())
+
         try:
             activity_summary_df = activity_summary_df.drop(
                 ["distances", "heartRateZones"], axis=1
@@ -1438,7 +1440,6 @@ def fitbit_activity_scope():
             activity_summary_df, activity_summary_columns, user, date_pulled
         )
         # Append dfs to df list
-        print(activity_summary_df.to_string())
         activities_list.append(activities_df)
         activity_summary_list.append(activity_summary_df)
         activity_goals_list.append(activity_goals_df)
@@ -1553,98 +1554,98 @@ def fitbit_activity_scope():
 
     if len(activity_summary_list) > 0:
 
- #       try:
+        try:
 
-        bulk_activity_summary_df = pd.concat(activity_summary_list, axis=0)
+            bulk_activity_summary_df = pd.concat(activity_summary_list, axis=0)
 
-        pandas_gbq.to_gbq(
-            dataframe=bulk_activity_summary_df,
-            destination_table=_tablename("activity_summary"),
-            project_id=project_id,
-            if_exists="append",
-            table_schema=[
-                {
-                    "name": "id",
-                    "type": "STRING",
-                    "mode": "REQUIRED",
-                    "description": "Primary Key",
-                },
-                {
-                    "name": "date",
-                    "type": "DATE",
-                    "mode": "REQUIRED",
-                    "description": "The date values were extracted",
-                },
-                {
-                    "name": "active_score",
-                    "type": "INTEGER",
-                    "description": "No Description",
-                },
-                {
-                    "name": "activity_calories",
-                    "type": "INTEGER",
-                    "description": "The number of calories burned for the day during periods the user was active above sedentary level. This includes both activity burned calories and BMR.",
-                },
-                {
-                    "name": "calories_bmr",
-                    "type": "INTEGER",
-                    "description": "Total BMR calories burned for the day.",
-                },
-                {
-                    "name": "calories_out",
-                    "type": "INTEGER",
-                    "description": "Total calories burned for the day (daily timeseries total).",
-                },
-                {
-                    "name": "elevation",
-                    "type": "INTEGER",
-                    "description": "The elevation traveled for the day.",
-                },
-                {
-                    "name": "fairly_active_minutes",
-                    "type": "INTEGER",
-                    "description": "Total minutes the user was fairly/moderately active.",
-                },
-                {
-                    "name": "floors",
-                    "type": "INTEGER",
-                    "description": "The equivalent floors climbed for the day.",
-                },
-                {
-                    "name": "lightly_active_minutes",
-                    "type": "INTEGER",
-                    "description": "	Total minutes the user was lightly active.",
-                },
-                {
-                    "name": "marginal_calories",
-                    "type": "INTEGER",
-                    "description": "Total marginal estimated calories burned for the day.",
-                },
-                {
-                    "name": "resting_heart_rate",
-                    "type": "INTEGER",
-                    "description": "The resting heart rate for the day",
-                },
-                {
-                    "name": "sedentary_minutes",
-                    "type": "INTEGER",
-                    "description": "Total minutes the user was sedentary.",
-                },
-                {
-                    "name": "very_active_minutes",
-                    "type": "INTEGER",
-                    "description": "Total minutes the user was very active.",
-                },
-                {
-                    "name": "steps",
-                    "type": "INTEGER",
-                    "description": "Total steps taken for the day.",
-                },
-            ],
-        )
+            pandas_gbq.to_gbq(
+                dataframe=bulk_activity_summary_df,
+                destination_table=_tablename("activity_summary"),
+                project_id=project_id,
+                if_exists="append",
+                table_schema=[
+                    {
+                        "name": "id",
+                        "type": "STRING",
+                        "mode": "REQUIRED",
+                        "description": "Primary Key",
+                    },
+                    {
+                        "name": "date",
+                        "type": "DATE",
+                        "mode": "REQUIRED",
+                        "description": "The date values were extracted",
+                    },
+                    {
+                        "name": "active_score",
+                        "type": "INTEGER",
+                        "description": "No Description",
+                    },
+                    {
+                        "name": "activity_calories",
+                        "type": "INTEGER",
+                        "description": "The number of calories burned for the day during periods the user was active above sedentary level. This includes both activity burned calories and BMR.",
+                    },
+                    {
+                        "name": "calories_bmr",
+                        "type": "INTEGER",
+                        "description": "Total BMR calories burned for the day.",
+                    },
+                    {
+                        "name": "calories_out",
+                        "type": "INTEGER",
+                        "description": "Total calories burned for the day (daily timeseries total).",
+                    },
+                    {
+                        "name": "elevation",
+                        "type": "INTEGER",
+                        "description": "The elevation traveled for the day.",
+                    },
+                    {
+                        "name": "fairly_active_minutes",
+                        "type": "INTEGER",
+                        "description": "Total minutes the user was fairly/moderately active.",
+                    },
+                    {
+                        "name": "floors",
+                        "type": "INTEGER",
+                        "description": "The equivalent floors climbed for the day.",
+                    },
+                    {
+                        "name": "lightly_active_minutes",
+                        "type": "INTEGER",
+                        "description": "	Total minutes the user was lightly active.",
+                    },
+                    {
+                        "name": "marginal_calories",
+                        "type": "INTEGER",
+                        "description": "Total marginal estimated calories burned for the day.",
+                    },
+                    {
+                        "name": "resting_heart_rate",
+                        "type": "INTEGER",
+                        "description": "The resting heart rate for the day",
+                    },
+                    {
+                        "name": "sedentary_minutes",
+                        "type": "INTEGER",
+                        "description": "Total minutes the user was sedentary.",
+                    },
+                    {
+                        "name": "very_active_minutes",
+                        "type": "INTEGER",
+                        "description": "Total minutes the user was very active.",
+                    },
+                    {
+                        "name": "steps",
+                        "type": "INTEGER",
+                        "description": "Total steps taken for the day.",
+                    },
+                ],
+            )
 
-#        except (Exception) as e:
-#            log.error("exception occured: %s", str(e))
+        except (Exception) as e:
+            log.error("exception occured: %s", str(e))
 
     if len(activity_goals_list) > 0:
 
