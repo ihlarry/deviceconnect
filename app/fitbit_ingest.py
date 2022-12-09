@@ -2119,7 +2119,7 @@ def fitbit_sleep_scope():
         if fitbit_bp.session.token:
             del fitbit_bp.session.token
 
-        try:
+##        try:
 
             resp = fitbit.get("/1/user/-/sleep/date/" + date_pulled + ".json")
 
@@ -2202,8 +2202,8 @@ def fitbit_sleep_scope():
             sleep_list.append(sleep_df)
             sleep_summary_list.append(sleep_summary_df)
 
-        except (Exception) as e:
-            log.error("exception occured: %s", str(e))
+#        except (Exception) as e:
+#            log.error("exception occured: %s", str(e))
 
     # end loop over users
 
