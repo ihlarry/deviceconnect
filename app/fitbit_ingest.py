@@ -519,7 +519,7 @@ def fitbit_body_weight():
         if fitbit_bp.session.token:
             del fitbit_bp.session.token
 
-        try:
+#        try:
 
             resp = fitbit.get(
                 "/1/user/-/body/log/weight/date/" + date_pulled + ".json"
@@ -541,8 +541,8 @@ def fitbit_body_weight():
             )
             body_weight_df_list.append(body_weight_df)
 
-        except (Exception) as e:
-            log.error("exception occured: %s", str(e))
+#        except (Exception) as e:
+#            log.error("exception occured: %s", str(e))
 
     # end loop over users
 
