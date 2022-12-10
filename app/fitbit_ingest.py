@@ -1341,109 +1341,109 @@ def fitbit_activity_scope():
         if fitbit_bp.session.token:
             del fitbit_bp.session.token
 
-#        try:
-
-        resp = fitbit.get(
-            "/1/user/-/activities/date/" + date_pulled + ".json"
-        )
-
-        log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
-
-        # subset response for activites, summary, and goals
-        activity_goals = resp.json()["goals"]
-        activities = resp.json()["activities"]
-        activity_summary = resp.json()["summary"]
-
-        activity_goals_df = pd.json_normalize(activity_goals)
-        activity_goals_columns = [
-            "activeMinutes",
-            "caloriesOut",
-            "distance",
-            "floors",
-            "steps",
-        ]
-        activity_goals_df = _normalize_response(
-            activity_goals_df, activity_goals_columns, user, date_pulled
-        )
-
-        # activity_distances = resp.json()["summary"]["distances"]
-        # activity_distances_df = pd.json_normalize(activity_distances)
-        # activity_distances_columns = [
-        #     "activity",
-        #     "total_distance",
-        #     "tracker_distance",
-        #     "logged_activites_distance",
-        #     "very_active_distance",
-        #     "moderetly_active_distance",
-        #     "lightly_active_distance",
-        #     "sedentary_active_distance",
-        # ]
-
-        activities_df = pd.json_normalize(activities)
-        # Define columns
-        activites_columns = [
-            "activityId",
-            "activityParentId",
-            "activityParentName",
-            "calories",
-            "description",
-            "distance",
-            "duration",
-            "hasActiveZoneMinutes",
-            "hasStartTime",
-            "isFavorite",
-            "lastModified",
-            "logId",
-            "name",
-            "startDate",
-            "startTime",
-            "steps",
-        ]
-        activities_df = _normalize_response(
-            activities_df, activites_columns, user, date_pulled
-        )
-        activities_df["start_datetime"] = pd.to_datetime(
-            activities_df["start_date"] + " " + activities_df["start_time"]
-        )
-        activities_df = activities_df.drop(
-            ["start_date", "start_time", "last_modified"], axis=1
-        )
-
-        activity_summary_df = pd.json_normalize(activity_summary)
-
         try:
-            activity_summary_df = activity_summary_df.drop(
-                ["distances", "heartRateZones"], axis=1
+
+            resp = fitbit.get(
+                "/1/user/-/activities/date/" + date_pulled + ".json"
             )
-        except:
-            pass
 
-        activity_summary_columns = [
-            "activeScore",
-            "activityCalories",
-            "caloriesBMR",
-            "caloriesOut",
-            "elevation",
-            "fairlyActiveMinutes",
-            "floors",
-            "lightlyActiveMinutes",
-            "marginalCalories",
-            "restingHeartRate",
-            "sedentaryMinutes",
-            "veryActiveMinutes",
-            "steps"
-        ]
+            log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
 
-        activity_summary_df = _normalize_response(
-            activity_summary_df, activity_summary_columns, user, date_pulled
-        )
-        # Append dfs to df list
-        activities_list.append(activities_df)
-        activity_summary_list.append(activity_summary_df)
-        activity_goals_list.append(activity_goals_df)
+            # subset response for activites, summary, and goals
+            activity_goals = resp.json()["goals"]
+            activities = resp.json()["activities"]
+            activity_summary = resp.json()["summary"]
 
-#        except (Exception) as e:
-#            log.error("exception occured: %s", str(e))
+            activity_goals_df = pd.json_normalize(activity_goals)
+            activity_goals_columns = [
+                "activeMinutes",
+                "caloriesOut",
+                "distance",
+                "floors",
+                "steps",
+            ]
+            activity_goals_df = _normalize_response(
+                activity_goals_df, activity_goals_columns, user, date_pulled
+            )
+
+            # activity_distances = resp.json()["summary"]["distances"]
+            # activity_distances_df = pd.json_normalize(activity_distances)
+            # activity_distances_columns = [
+            #     "activity",
+            #     "total_distance",
+            #     "tracker_distance",
+            #     "logged_activites_distance",
+            #     "very_active_distance",
+            #     "moderetly_active_distance",
+            #     "lightly_active_distance",
+            #     "sedentary_active_distance",
+            # ]
+
+            activities_df = pd.json_normalize(activities)
+            # Define columns
+            activites_columns = [
+                "activityId",
+                "activityParentId",
+                "activityParentName",
+                "calories",
+                "description",
+                "distance",
+                "duration",
+                "hasActiveZoneMinutes",
+                "hasStartTime",
+                "isFavorite",
+                "lastModified",
+                "logId",
+                "name",
+                "startDate",
+                "startTime",
+                "steps",
+            ]
+            activities_df = _normalize_response(
+                activities_df, activites_columns, user, date_pulled
+            )
+            activities_df["start_datetime"] = pd.to_datetime(
+                activities_df["start_date"] + " " + activities_df["start_time"]
+            )
+            activities_df = activities_df.drop(
+                ["start_date", "start_time", "last_modified"], axis=1
+            )
+
+            activity_summary_df = pd.json_normalize(activity_summary)
+
+            try:
+                activity_summary_df = activity_summary_df.drop(
+                    ["distances", "heartRateZones"], axis=1
+                )
+            except:
+                pass
+
+            activity_summary_columns = [
+                "activeScore",
+                "activityCalories",
+                "caloriesBMR",
+                "caloriesOut",
+                "elevation",
+                "fairlyActiveMinutes",
+                "floors",
+                "lightlyActiveMinutes",
+                "marginalCalories",
+                "restingHeartRate",
+                "sedentaryMinutes",
+                "veryActiveMinutes",
+                "steps"
+            ]
+
+            activity_summary_df = _normalize_response(
+                activity_summary_df, activity_summary_columns, user, date_pulled
+            )
+            # Append dfs to df list
+            activities_list.append(activities_df)
+            activity_summary_list.append(activity_summary_df)
+            activity_goals_list.append(activity_goals_df)
+
+        except (Exception) as e:
+            log.error("exception occured: %s", str(e))
 
     fitbit_stop = timeit.default_timer()
     fitbit_execution_time = fitbit_stop - start
@@ -2119,7 +2119,7 @@ def fitbit_sleep_scope():
         if fitbit_bp.session.token:
             del fitbit_bp.session.token
 
-##        try:
+        try:
 
             resp = fitbit.get("/1/user/-/sleep/date/" + date_pulled + ".json")
 
@@ -2202,8 +2202,8 @@ def fitbit_sleep_scope():
             sleep_list.append(sleep_df)
             sleep_summary_list.append(sleep_summary_df)
 
-#        except (Exception) as e:
-#            log.error("exception occured: %s", str(e))
+        except (Exception) as e:
+            log.error("exception occured: %s", str(e))
 
     # end loop over users
 
@@ -2353,8 +2353,8 @@ def fitbit_sleep_scope():
                         "mode": "REQUIRED",
                         "description": "The date values were extracted",
                     },
-                    {"name": "date_time", "type": "TIMESTAMP"},
                     {"name": "value", "type": "INTEGER"},
+                    {"name": "date_time", "type": "TIMESTAMP"}
                 ],
             )
 
