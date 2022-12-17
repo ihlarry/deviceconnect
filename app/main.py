@@ -43,6 +43,7 @@ from flask_dance.contrib.fitbit import fitbit
 from .fitbit_auth import bp as fitbit_auth_bp, fitbit_bp
 from .frontend import bp as frontend_bp
 from .fitbit_ingest import bp as fitbit_ingest_bp
+from .fitbit_scheduled_queries import bp as fitbit_query_bp
 
 
 #
@@ -63,6 +64,7 @@ if not os.environ.get("FRONTEND_ONLY"):
     app.register_blueprint(fitbit_ingest_bp)
 if not os.environ.get("BACKEND_ONLY"):
     app.register_blueprint(frontend_bp)
+app.register_blueprint(fitbit_query_bp)
 
 #
 # configure logging
