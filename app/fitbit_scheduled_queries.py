@@ -28,7 +28,8 @@ def find_step_thresholds():
     log.debug("after yesterday")
 
     client = bigquery.Client()
-    job_config = bigquery.QueryJobConfig(destination="pericardits.fitbit.step_alerts")
+    job_config = bigquery.QueryJobConfig()
+    job_config.destination = "pericardits.fitbit.step_alerts"
     job_config.write_disposition = 'WRITE_APPEND'
     query = """
         SELECT *
@@ -36,14 +37,12 @@ def find_step_thresholds():
         WHERE value < 10000
         AND date = @yesterday;
     """
-    job_config = bigquery.QueryJobConfig(
-        query_parameters=[
+    job_config.query_parameters=[
             bigquery.ScalarQueryParameter("yesterday", "STRING", datetime.strftime(yesterday, '%Y-%m-%d')),
         ]
-    )
-    log.debug(job_config)
     query_job = client.query(query, job_config=job_config)
     query_job.result()
-    log.debug(query_job.result())
+    for row in query_job:
+        print("{}: \t{}".format(row.value, row.date))
 
     return "Done"
