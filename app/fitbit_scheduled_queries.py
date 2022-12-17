@@ -16,7 +16,6 @@ bigquery_datasetname = os.environ.get("BIGQUERY_DATASET")
 if not bigquery_datasetname:
     bigquery_datasetname = "fitbit2"
 
-client = bigquery.Client()
 
 def _tablename(table: str) -> str:
     return bigquery_datasetname + "." + table
@@ -26,6 +25,7 @@ def _tablename(table: str) -> str:
 def find_step_thresholds():
     # Construct a BigQuery client object.
     yesterday = datetime.now() - timedelta(1)
+    log.debug("after yesterday")
 
     client = bigquery.Client()
     job_config = bigquery.QueryJobConfig(destination="pericardits.fitbit.step_alerts")
@@ -41,7 +41,9 @@ def find_step_thresholds():
             bigquery.ScalarQueryParameter("yesterday", "STRING", datetime.strftime(yesterday, '%Y-%m-%d')),
         ]
     )
+    log.debug(job_config)
     query_job = client.query(query, job_config=job_config)
     query_job.result()
+    log.debug(query_job.result())
 
     return "Done"
