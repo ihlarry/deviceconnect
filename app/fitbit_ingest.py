@@ -492,6 +492,112 @@ def fitbit_chunk_1():
     return "Fitbit Chunk Loaded"
 
 
+@bp.route("/fitbit_device")
+def fitbit_device():
+    start = timeit.default_timer()
+    project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
+    # if caller provided date as query params, use that otherwise use yesterday
+    date_pulled = request.args.get("date", _date_pulled())
+    user_list = fitbit_bp.storage.all_users()
+    if request.args.get("user") in user_list:
+        user_list = [request.args.get("user")]
+
+    pd.set_option("display.max_columns", 500)
+    device_list = []
+    for user in user_list:
+
+        log.debug("user: %s", user)
+
+        fitbit_bp.storage.user = user
+
+        if fitbit_bp.session.token:
+            del fitbit_bp.session.token
+
+        try:
+            ############## CONNECT TO DEVICE ENDPOINT #################
+            resp = fitbit.get("1/user/-/devices.json")
+
+            log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
+
+            device_df = pd.json_normalize(resp.json())
+            try:
+                device_df = device_df.drop(
+                    ["features", "id", "mac", "type"], axis=1
+                )
+            except:
+                pass
+
+            device_columns = [
+                "battery",
+                "batteryLevel",
+                "deviceVersion",
+                "lastSyncTime",
+            ]
+            device_df = _normalize_response(
+                device_df, device_columns, user, date_pulled
+            )
+            device_df["last_sync_time"] = device_df["last_sync_time"].apply(
+                lambda x: datetime.strptime(x, "%Y-%m-%dT%H:%M:%S.%f")
+            )
+            device_list.append(device_df)
+
+        except (Exception) as e:
+            log.error("exception occured: %s", str(e))
+
+    if len(device_list) > 0:
+
+        try:
+
+            bulk_device_df = pd.concat(device_list, axis=0)
+
+            pandas_gbq.to_gbq(
+                dataframe=bulk_device_df,
+                destination_table=_tablename("device"),
+                project_id=project_id,
+                if_exists="append",
+                table_schema=[
+                    {
+                        "name": "id",
+                        "type": "STRING",
+                        "description": "Primary Key",
+                    },
+                    {
+                        "name": "date",
+                        "type": "DATE",
+                        "description": "The date values were extracted",
+                    },
+                    {
+                        "name": "battery",
+                        "type": "STRING",
+                        "description": "Returns the battery level of the device. Supported: High | Medium | Low | Empty",
+                    },
+                    {
+                        "name": "battery_level",
+                        "type": "INTEGER",
+                        "description": "Returns the battery level percentage of the device.",
+                    },
+                    {
+                        "name": "device_version",
+                        "type": "STRING",
+                        "description": "The product name of the device.",
+                    },
+                    {
+                        "name": "last_sync_time",
+                        "type": "TIMESTAMP",
+                        "description": "Timestamp representing the last time the device was sync'd with the Fitbit mobile application.",
+                    },
+                ],
+            )
+
+        except (Exception) as e:
+            log.error("exception occured: %s", str(e))
+    stop = timeit.default_timer()
+    execution_time = stop - start
+    print("Fitbit Device Info Loaded " + str(execution_time))
+
+    fitbit_bp.storage.user = None
+
+    return "Fitbit Device Info Loaded"
 #
 # Body and Weight
 #
