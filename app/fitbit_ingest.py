@@ -2853,7 +2853,7 @@ def fitbit_temp_scope():
                     "description": "The type of skin temperature log created",
                 },
                 {
-                    "name": "value_nightlyRelative",
+                    "name": "value_nightly_relative",
                     "type": "FLOAT",
                     "description": "The user's average temperature during a period of sleep.",
                 }
