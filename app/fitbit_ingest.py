@@ -2784,31 +2784,31 @@ def fitbit_temp_scope():
         if fitbit_bp.session.token:
             del fitbit_bp.session.token
 
- #       try:
-        resp = fitbit.get(f"/1/user/-/temp/skin/date/{date_pulled}.json")
+        try:
+            resp = fitbit.get(f"/1/user/-/temp/skin/date/{date_pulled}.json")
 
-        log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
+            log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
 
-        temp = resp.json()["tempSkin"]
-        temp_df = pd.json_normalize(temp)
+            temp = resp.json()["tempSkin"]
+            temp_df = pd.json_normalize(temp)
 
-        print("here")
-        temp_columns = [
-            "dateTime",
-            "logType",
-            "value.nightlyRelative"
-        ]
+            print("here")
+            temp_columns = [
+                "dateTime",
+                "logType",
+                "value.nightlyRelative"
+            ]
 
-        # Fill missing columns
-        temp_df = _normalize_response(
-            temp_df, temp_columns, user, date_pulled
-        )
+            # Fill missing columns
+            temp_df = _normalize_response(
+                temp_df, temp_columns, user, date_pulled
+            )
 
-        # Append dfs to df list
-        temp_list.append(temp_df)
+            # Append dfs to df list
+            temp_list.append(temp_df)
 
-#        except (Exception) as e:
-#            log.error("temp exception occured: %s", str(e))
+        except (Exception) as e:
+            log.error("temp exception occured: %s", str(e))
 
     # end loop over users
 
@@ -2818,50 +2818,50 @@ def fitbit_temp_scope():
 
     if len(temp_list) > 0:
 
- #       try:
+       try:
 
-        print(temp_list)
-        bulk_temp_df = pd.concat(temp_list, axis=0)
+            print(temp_list)
+            bulk_temp_df = pd.concat(temp_list, axis=0)
 
-        pandas_gbq.to_gbq(
-            dataframe=bulk_temp_df,
-            destination_table=_tablename("skintemp"),
-            project_id=project_id,
-            if_exists="append",
-            table_schema=[
-                {
-                    "name": "id",
-                    "type": "STRING",
-                    "mode": "REQUIRED",
-                    "description": "Primary Key",
-                },
-                {
-                    "name": "date",
-                    "type": "DATE",
-                    "mode": "REQUIRED",
-                    "description": "The date values were extracted",
-                },
-                {
-                    "name": "date_time",
-                    "type": "DATE",
-                    "mode": "REQUIRED",
-                    "description": "the date of the measurements",
-                },
-                {
-                    "name": "log_type",
-                    "type": "STRING",
-                    "description": "The type of skin temperature log created",
-                },
-                {
-                    "name": "value_nightly_relative",
-                    "type": "FLOAT",
-                    "description": "The user's average temperature during a period of sleep.",
-                }
-            ],
-        )
+            pandas_gbq.to_gbq(
+                dataframe=bulk_temp_df,
+                destination_table=_tablename("skintemp"),
+                project_id=project_id,
+                if_exists="append",
+                table_schema=[
+                    {
+                        "name": "id",
+                        "type": "STRING",
+                        "mode": "REQUIRED",
+                        "description": "Primary Key",
+                    },
+                    {
+                        "name": "date",
+                        "type": "DATE",
+                        "mode": "REQUIRED",
+                        "description": "The date values were extracted",
+                    },
+                    {
+                        "name": "date_time",
+                        "type": "DATE",
+                        "mode": "REQUIRED",
+                        "description": "the date of the measurements",
+                    },
+                    {
+                        "name": "log_type",
+                        "type": "STRING",
+                        "description": "The type of skin temperature log created",
+                    },
+                    {
+                        "name": "value_nightly_relative",
+                        "type": "FLOAT",
+                        "description": "The user's average temperature during a period of sleep.",
+                    }
+                ],
+            )
 
- #       except (Exception) as e:
- #           log.error("temp exception occured: %s", str(e))
+       except (Exception) as e:
+           log.error("temp exception occured: %s", str(e))
 
     stop = timeit.default_timer()
     execution_time = stop - start
