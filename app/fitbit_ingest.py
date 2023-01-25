@@ -2855,7 +2855,7 @@ def fitbit_temp_scope():
                     "name": "value",
                     "type": "FLOAT",
                     "description": "The user's average temperature during a period of sleep.",
-                },
+                }
             ],
         )
 
