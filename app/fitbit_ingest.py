@@ -2820,6 +2820,7 @@ def fitbit_temp_scope():
 
  #       try:
 
+        print(temp_list)
         bulk_temp_df = pd.concat(temp_list, axis=0)
 
         pandas_gbq.to_gbq(
@@ -2842,7 +2843,7 @@ def fitbit_temp_scope():
                 },
                 {
                     "name": "dateTime",
-                    "type": "DATE",
+                    "type": "DATETIME",
                     "mode": "REQUIRED",
                     "description": "the date of the measurements",
                 },
