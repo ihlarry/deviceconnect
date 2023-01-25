@@ -2796,7 +2796,7 @@ def fitbit_temp_scope():
         temp_columns = [
             "dateTime",
             "logType",
-            "value"
+            "value.nightlyRelative"
         ]
 
         # Fill missing columns
@@ -2853,7 +2853,7 @@ def fitbit_temp_scope():
                     "description": "The type of skin temperature log created",
                 },
                 {
-                    "name": "value",
+                    "name": "value_nightlyRelative",
                     "type": "FLOAT",
                     "description": "The user's average temperature during a period of sleep.",
                 }
