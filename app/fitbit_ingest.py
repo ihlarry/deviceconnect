@@ -2842,8 +2842,8 @@ def fitbit_temp_scope():
                     "description": "The date values were extracted",
                 },
                 {
-                    "name": "dateTime",
-                    "type": "DATETIME",
+                    "name": "date_time",
+                    "type": "DATE",
                     "mode": "REQUIRED",
                     "description": "the date of the measurements",
                 },
