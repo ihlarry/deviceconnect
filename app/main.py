@@ -61,7 +61,6 @@ app.wsgi_app = ProxyFix(app.wsgi_app)
 app.register_blueprint(fitbit_auth_bp)
 app.register_blueprint(fitbit_bp, url_prefix="/services")  # from flask-dance
 if not os.environ.get("FRONTEND_ONLY"):
-    print("ingest registered")
     app.register_blueprint(fitbit_ingest_bp)
 if not os.environ.get("BACKEND_ONLY"):
     app.register_blueprint(frontend_bp)
