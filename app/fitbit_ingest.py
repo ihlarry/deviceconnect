@@ -2795,7 +2795,7 @@ def fitbit_temp_scope():
         temp_columns = [
             "dateTime",
             "logType",
-            "value.nightlyRelative"
+            "value"
         ]
 
         # Fill missing columns
