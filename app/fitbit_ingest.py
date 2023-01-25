@@ -2792,6 +2792,7 @@ def fitbit_temp_scope():
         temp = resp.json()["tempSkin"]
         temp_df = pd.json_normalize(temp)
 
+        print("here")
         temp_columns = [
             "dateTime",
             "logType",
