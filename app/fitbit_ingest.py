@@ -2848,8 +2848,8 @@ def fitbit_temp_scope():
                     "description": "the date of the measurements",
                 },
                 {
-                    "name": "logType",
-                    "type": "FLOAT",
+                    "name": "log_type",
+                    "type": "STRING",
                     "description": "The type of skin temperature log created",
                 },
                 {
