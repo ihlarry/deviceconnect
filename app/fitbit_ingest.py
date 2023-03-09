@@ -76,6 +76,10 @@ from skimpy import clean_columns
 
 from .fitbit_auth import fitbit_bp
 
+from google.cloud import bigquery
+
+client = bigquery.Client()
+
 
 log = logging.getLogger(__name__)
 
@@ -143,6 +147,15 @@ def _normalize_response(df, column_list, email, date_pulled):
     df = df.reindex(columns=column_list)
     df.insert(0, "id", email)
     df.insert(1, "date", date_pulled)
+    df = clean_columns(df)
+    return df
+
+def _normalize_response2(df, column_list, email):
+    for col in column_list:
+        if col not in df.columns:
+            df[col] = None
+    df = df.reindex(columns=column_list)
+    df.insert(0, "id", email)
     df = clean_columns(df)
     return df
 
@@ -2870,3 +2883,172 @@ def fitbit_temp_scope():
     fitbit_bp.storage.user = None
 
     return "temp Scope Loaded"
+
+#
+# Intraday Data
+#
+@bp.route("/fitbit_lastsynch_grab")
+def fitbit_lastsynch_grab():
+
+    start = timeit.default_timer()
+    project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
+    # if caller provided date as query params, use that otherwise use yesterday
+    date_pulled = request.args.get("date", _date_pulled())
+    user_list = fitbit_bp.storage.all_users()
+    if request.args.get("user") in user_list:
+        user_list = [request.args.get("user")]
+
+    pd.set_option("display.max_columns", 500)
+
+    steps_list = []
+
+
+    for user in user_list:
+
+        log.debug("user: %s", user)
+
+        fitbit_bp.storage.user = user
+
+        if fitbit_bp.session.token:
+            del fitbit_bp.session.token
+
+        try:
+            ############## CONNECT TO DEVICE ENDPOINT #################
+            fpoint = fitbit_data(user)
+            last_sync_stored = fpoint.get_lastsynch()
+            if last_sync_stored != None:
+                lastsyncstored = last_sync_stored.strftime('%Y-%m-%d')
+            else:
+                lastsyncstored = ""
+            resp = fitbit.get("1/user/-/devices.json")
+
+            log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
+
+            device_df = pd.json_normalize(resp.json())
+            try:
+                device_df = device_df.drop(
+                    ["features", "id", "mac", "type"], axis=1
+                )
+            except:
+                pass
+
+            device_columns = [
+                "battery",
+                "batteryLevel",
+                "deviceVersion",
+                "lastSyncTime",
+            ]
+            device_df = _normalize_response(
+                device_df, device_columns, user, date_pulled
+            )
+            device_df["last_sync_time"] = device_df["last_sync_time"].apply(
+                lambda x: datetime.strptime(x, "%Y-%m-%dT%H:%M:%S.%f")
+            )
+            fitls = device_df["last_sync_time"]
+            fitlastsync = datetime.datetime.strptime(fitls[0] + " " + fitls[1], '%Y-%m-%d %H:%M:%S.%f')
+            if lastsyncstored:
+                delta = fitlastsync.date() - lastsyncstored.date()
+                print(fitlastsync.strftime('%Y-%m-%d %H:%M:%S.%f'), lastsyncstored, str(delta.days))
+
+        except (Exception) as e:
+            log.error("exception occured: %s", str(e))
+
+        try:
+
+            if delta.days > 0:
+                enddate = fitlastsync.date() - datetime.timedelta(days=1)
+                resp = fitbit.get(
+                    "/1/user/-/activities/steps/date/"
+                    + lastsyncstored
+                    + "/"
+                    + enddate
+                    + ".json"
+                )
+
+                log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
+                steps = resp.json()["activities-steps"]
+                steps_df = pd.json_normalize(steps)
+                steps_columns = ["dateTime","value"]
+                steps_df = _normalize_response2(
+                    steps_df, steps_columns, user
+                )
+                steps_df["value"] = pd.to_numeric(steps_df["value"])
+                steps_list.append(steps_df)
+
+        except (Exception) as e:
+                log.error("exception occured: %s", str(e))
+
+
+    # end loop over users
+
+    fitbit_stop = timeit.default_timer()
+    fitbit_execution_time = fitbit_stop - start
+    print("Sync Steps Scope: " + str(fitbit_execution_time))
+
+    if len(steps_list) > 0:
+
+        try:
+
+            bulk_steps_df = pd.concat(steps_list, axis=0)
+
+            pandas_gbq.to_gbq(
+                dataframe=bulk_steps_df,
+                destination_table=_tablename("sync_steps"),
+                project_id=project_id,
+                if_exists="append",
+                table_schema=[
+                    {
+                        "name": "id",
+                        "type": "STRING",
+                        "mode": "REQUIRED",
+                        "description": "Primary Key",
+                    },
+                    {
+                        "name": "dateTime",
+                        "type": "DATE",
+                        "mode": "REQUIRED",
+                        "description": "The date values were extracted",
+                    },
+                    {
+                        "name": "value",
+                        "type": "INTEGER",
+                        "description": "Number of steps at this time",
+                    },
+                    {
+                        "name": "date_time",
+                        "type": "TIMESTAMP",
+                        "description": "Time of day",
+                    },
+                ],
+            )
+        except (Exception) as e:
+            log.error("exception occured: %s", str(e))
+
+    fitbit_bp.storage.user = None
+
+    return "Sync Steps Loaded"
+
+
+class fitbit_data():
+
+    def __init__(self, email):
+        self.listout = []
+        self.dict_outfinal = {}
+        self.email = email
+
+
+    def get_lastsynch(self):
+        last_sync_stored = ""
+        sql = """
+            SELECT last_sync_time FROM `pericardits.fitbit.device` 
+            where id = @id and last_sync_time = (select max(last_sync_time) from `pericardits.fitbit.device`)
+        """
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("id", "STRING", self.email),
+            ]
+        )
+        query_job = client.query(sql, job_config=job_config)
+        if query_job[0]:
+            last_sync_stored = query_job[0].last_sync_time
+        return last_sync_stored

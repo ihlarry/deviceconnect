@@ -64,6 +64,7 @@ from urllib.parse import urlencode
 from flask import session, redirect, url_for, current_app, Blueprint
 from authlib.integrations.flask_client import OAuth
 
+
 log = logging.getLogger(__name__)
 
 bp = Blueprint("frontend_bp", __name__)
