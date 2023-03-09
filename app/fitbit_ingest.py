@@ -2912,46 +2912,46 @@ def fitbit_lastsynch_grab():
         if fitbit_bp.session.token:
             del fitbit_bp.session.token
 
+##        try:
+        ############## CONNECT TO DEVICE ENDPOINT #################
+        fpoint = fitbit_data(user)
+        last_sync_stored = fpoint.get_lastsynch()
+        if last_sync_stored != None:
+            lastsyncstored = last_sync_stored.strftime('%Y-%m-%d')
+        else:
+            lastsyncstored = ""
+        resp = fitbit.get("1/user/-/devices.json")
+
+        log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
+
+        device_df = pd.json_normalize(resp.json())
         try:
-            ############## CONNECT TO DEVICE ENDPOINT #################
-            fpoint = fitbit_data(user)
-            last_sync_stored = fpoint.get_lastsynch()
-            if last_sync_stored != None:
-                lastsyncstored = last_sync_stored.strftime('%Y-%m-%d')
-            else:
-                lastsyncstored = ""
-            resp = fitbit.get("1/user/-/devices.json")
-
-            log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
-
-            device_df = pd.json_normalize(resp.json())
-            try:
-                device_df = device_df.drop(
-                    ["features", "id", "mac", "type"], axis=1
-                )
-            except:
-                pass
-
-            device_columns = [
-                "battery",
-                "batteryLevel",
-                "deviceVersion",
-                "lastSyncTime",
-            ]
-            device_df = _normalize_response(
-                device_df, device_columns, user, date_pulled
+            device_df = device_df.drop(
+                ["features", "id", "mac", "type"], axis=1
             )
-            device_df["last_sync_time"] = device_df["last_sync_time"].apply(
-                lambda x: datetime.strptime(x, "%Y-%m-%dT%H:%M:%S.%f")
-            )
-            fitls = device_df["last_sync_time"]
-            fitlastsync = datetime.datetime.strptime(fitls[0] + " " + fitls[1], '%Y-%m-%d %H:%M:%S.%f')
-            if lastsyncstored:
-                delta = fitlastsync.date() - lastsyncstored.date()
-                print(fitlastsync.strftime('%Y-%m-%d %H:%M:%S.%f'), lastsyncstored, str(delta.days))
+        except:
+            pass
 
-        except (Exception) as e:
-            log.error("exception occured: %s", str(e))
+        device_columns = [
+            "battery",
+            "batteryLevel",
+            "deviceVersion",
+            "lastSyncTime",
+        ]
+        device_df = _normalize_response(
+            device_df, device_columns, user, date_pulled
+        )
+        device_df["last_sync_time"] = device_df["last_sync_time"].apply(
+            lambda x: datetime.strptime(x, "%Y-%m-%dT%H:%M:%S.%f")
+        )
+        fitls = device_df["last_sync_time"]
+        fitlastsync = datetime.datetime.strptime(fitls[0] + " " + fitls[1], '%Y-%m-%d %H:%M:%S.%f')
+        if lastsyncstored:
+            delta = fitlastsync.date() - lastsyncstored.date()
+            print(fitlastsync.strftime('%Y-%m-%d %H:%M:%S.%f'), lastsyncstored, str(delta.days))
+
+##        except (Exception) as e:
+##            log.error("exception occured: %s", str(e))
 
         try:
 
@@ -3049,6 +3049,6 @@ class fitbit_data():
             ]
         )
         query_job = client.query(sql, job_config=job_config)
-        if query_job[0]:
+        if query_job:
             last_sync_stored = query_job[0].last_sync_time
         return last_sync_stored
