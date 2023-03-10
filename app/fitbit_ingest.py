@@ -78,7 +78,7 @@ from .fitbit_auth import fitbit_bp
 
 from google.cloud import bigquery
 
-client = bigquery.Client()
+client = bigquery.Client(location="us-central1", project="pericardits")
 
 
 log = logging.getLogger(__name__)
@@ -2945,7 +2945,7 @@ def fitbit_lastsynch_grab():
             lambda x: datetime.strptime(x, "%Y-%m-%dT%H:%M:%S.%f")
         )
         fitls = device_df["last_sync_time"]
-        fitlastsync = datetime.datetime.strptime(fitls[0] + " " + fitls[1], '%Y-%m-%d %H:%M:%S.%f')
+        fitlastsync = datetime.strptime(fitls[0] + " " + fitls[1], '%Y-%m-%d %H:%M:%S.%f')
         if lastsyncstored:
             delta = fitlastsync.date() - lastsyncstored.date()
             print(fitlastsync.strftime('%Y-%m-%d %H:%M:%S.%f'), lastsyncstored, str(delta.days))
