@@ -78,7 +78,7 @@ from .fitbit_auth import fitbit_bp
 
 from google.cloud import bigquery
 
-client = bigquery.Client(location="us-central1", project="pericardits")
+client = bigquery.Client(location="US", project="pericardits")
 
 
 log = logging.getLogger(__name__)
