@@ -3039,6 +3039,7 @@ class fitbit_data():
 
     def get_lastsynch(self):
         last_sync_stored = ""
+        print(self.email)
         sql = """
             SELECT last_sync_time FROM `pericardits.fitbit.device` 
             where id = @id and last_sync_time = (select max(last_sync_time) from `pericardits.fitbit.device`)
@@ -3050,7 +3051,7 @@ class fitbit_data():
         )
         query_job = client.query(sql, job_config=job_config)
         results = query_job.result()
-        print("hello0")
+        print("hello0 ", results)
         for row in results:
             print(row.last_sync_time)
             last_sync_stored = row.last_sync_time
