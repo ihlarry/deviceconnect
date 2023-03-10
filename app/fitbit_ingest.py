@@ -2945,7 +2945,7 @@ def fitbit_lastsynch_grab():
 #            lambda x: datetime.strptime(x, "%Y-%m-%dT%H:%M:%S.%f")
 #        )
         print("last_sync ", device_df["last_sync_time"])
-        fitls = device_df["last_sync_time"].split('T')
+        fitls = device_df.iloc[0]["last_sync_time"].split('T')
         fitlastsync = datetime.strptime(fitls[0] + " " + fitls[1], '%Y-%m-%d %H:%M:%S.%f')
         if lastsyncstored:
             delta = fitlastsync.date() - lastsyncstored.date()
