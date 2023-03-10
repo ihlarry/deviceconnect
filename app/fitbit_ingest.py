@@ -3050,8 +3050,8 @@ class fitbit_data():
         )
         query_job = client.query(sql, job_config=job_config)
         results = query_job.result()
-        print("hello")
-        print(results)
-        if results:
-            last_sync_stored = results[0].last_sync_time
+        print("hello0")
+        for row in results:
+            print(row.last_sync_time)
+            last_sync_stored = row.last_sync_time
         return last_sync_stored
