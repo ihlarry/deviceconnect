@@ -2954,31 +2954,31 @@ def fitbit_lastsynch_grab():
 ##        except (Exception) as e:
 ##            log.error("exception occured: %s", str(e))
 
-        try:
+ ##       try:
 
-            if delta.days > 0:
-                enddate = fitlastsync.date() - timedelta(days=1)
-                endd = enddate.strftime('%Y-%m-%d')
-                resp = fitbit.get(
-                    "/1/user/-/activities/steps/date/"
-                    + lastsyncstored
-                    + "/"
-                    + endd
-                    + ".json"
-                )
+        if delta.days > 0:
+            enddate = fitlastsync.date() - timedelta(days=1)
+            endd = enddate.strftime('%Y-%m-%d')
+            resp = fitbit.get(
+                "/1/user/-/activities/steps/date/"
+                + lastsyncstored
+                + "/"
+                + endd
+                + ".json"
+            )
 
-                log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
-                steps = resp.json()["activities-steps"]
-                steps_df = pd.json_normalize(steps)
-                steps_columns = ["dateTime","value"]
-                steps_df = _normalize_response2(
-                    steps_df, steps_columns, user
-                )
-                steps_df["value"] = pd.to_numeric(steps_df["value"])
-                steps_list.append(steps_df)
+            log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
+            steps = resp.json()["activities-steps"]
+            steps_df = pd.json_normalize(steps)
+            steps_columns = ["dateTime","value"]
+            steps_df = _normalize_response2(
+                steps_df, steps_columns, user
+            )
+            steps_df["value"] = pd.to_numeric(steps_df["value"])
+            steps_list.append(steps_df)
 
-        except (Exception) as e:
-                log.error("exception occured: %s", str(e))
+##        except (Exception) as e:
+ ##               log.error("exception occured: %s", str(e))
 
 
     # end loop over users
@@ -2989,42 +2989,42 @@ def fitbit_lastsynch_grab():
 
     if len(steps_list) > 0:
 
-        try:
+##        try:
 
-            bulk_steps_df = pd.concat(steps_list, axis=0)
+        bulk_steps_df = pd.concat(steps_list, axis=0)
 
-            pandas_gbq.to_gbq(
-                dataframe=bulk_steps_df,
-                destination_table=_tablename("sync_steps"),
-                project_id=project_id,
-                if_exists="append",
-                table_schema=[
-                    {
-                        "name": "id",
-                        "type": "STRING",
-                        "mode": "REQUIRED",
-                        "description": "Primary Key",
-                    },
-                    {
-                        "name": "dateTime",
-                        "type": "DATE",
-                        "mode": "REQUIRED",
-                        "description": "The date values were extracted",
-                    },
-                    {
-                        "name": "value",
-                        "type": "INTEGER",
-                        "description": "Number of steps at this time",
-                    },
-                    {
-                        "name": "date_time",
-                        "type": "TIMESTAMP",
-                        "description": "Time of day",
-                    },
-                ],
-            )
-        except (Exception) as e:
-            log.error("exception occured: %s", str(e))
+        pandas_gbq.to_gbq(
+            dataframe=bulk_steps_df,
+            destination_table=_tablename("sync_steps"),
+            project_id=project_id,
+            if_exists="append",
+            table_schema=[
+                {
+                    "name": "id",
+                    "type": "STRING",
+                    "mode": "REQUIRED",
+                    "description": "Primary Key",
+                },
+                {
+                    "name": "dateTime",
+                    "type": "DATE",
+                    "mode": "REQUIRED",
+                    "description": "The date values were extracted",
+                },
+                {
+                    "name": "value",
+                    "type": "INTEGER",
+                    "description": "Number of steps at this time",
+                },
+                {
+                    "name": "date_time",
+                    "type": "TIMESTAMP",
+                    "description": "Time of day",
+                },
+            ],
+        )
+##        except (Exception) as e:
+##            log.error("exception occured: %s", str(e))
 
     fitbit_bp.storage.user = None
 
