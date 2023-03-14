@@ -3009,7 +3009,7 @@ def fitbit_lastsynch_grab():
                     "description": "Primary Key",
                 },
                 {
-                    "name": "dateTime",
+                    "name": "date_time",
                     "type": "DATE",
                     "mode": "REQUIRED",
                     "description": "The date values were extracted",
@@ -3018,12 +3018,7 @@ def fitbit_lastsynch_grab():
                     "name": "value",
                     "type": "INTEGER",
                     "description": "Number of steps at this time",
-                },
-                {
-                    "name": "date_time",
-                    "type": "TIMESTAMP",
-                    "description": "Time of day",
-                },
+                }
             ],
         )
 ##        except (Exception) as e:
