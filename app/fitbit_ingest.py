@@ -2901,9 +2901,16 @@ def fitbit_lastsynch_grab():
     pd.set_option("display.max_columns", 500)
 
     steps_list = []
+    device_list = []
+
 
 
     for user in user_list:
+
+        a = datetime.strptime('1/1/2023',"%m/%d/%Y")
+        b = datetime.strptime('1/1/2023', "%m/%d/%Y")
+
+        delta = b - a
 
         log.debug("user: %s", user)
 
@@ -2912,77 +2919,78 @@ def fitbit_lastsynch_grab():
         if fitbit_bp.session.token:
             del fitbit_bp.session.token
 
-##        try:
-        ############## CONNECT TO DEVICE ENDPOINT #################
-        fpoint = fitbit_data(user)
-        last_sync_stored = fpoint.get_lastsynch()
-        if last_sync_stored != None:
-            lastsyncstored = last_sync_stored.strftime('%Y-%m-%d')
-        else:
-            lastsyncstored = ""
-        resp = fitbit.get("1/user/-/devices.json")
-
-        log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
-
-        device_df = pd.json_normalize(resp.json())
         try:
-            device_df = device_df.drop(
-                ["features", "id", "mac", "type"], axis=1
-            )
-        except:
-            pass
-
-        device_columns = [
-            "battery",
-            "batteryLevel",
-            "deviceVersion",
-            "lastSyncTime",
-        ]
-        device_df = _normalize_response(
-            device_df, device_columns, user, date_pulled
-        )
-#        device_df["last_sync_time"] = device_df["last_sync_time"].apply(
-#            lambda x: datetime.strptime(x, "%Y-%m-%dT%H:%M:%S.%f")
-#        )
-        print("last_sync ", device_df["last_sync_time"])
-        fitls = device_df.iloc[0]["last_sync_time"].split('T')
-        fitlastsync = datetime.strptime(fitls[0],'%Y-%m-%d')
-        if lastsyncstored:
-            delta = datetime.strptime(fitls[0],'%Y-%m-%d') - datetime.strptime(lastsyncstored,'%Y-%m-%d')
-            print(fitlastsync.strftime('%Y-%m-%d %H:%M:%S.%f'), lastsyncstored, str(delta.days))
-
-##        except (Exception) as e:
-##            log.error("exception occured: %s", str(e))
-
- ##       try:   fix below
-
-        if delta.days == 0:
-            enddate = fitlastsync.date() - timedelta(days=1)
-            endd = enddate.strftime('%Y-%m-%d')
-            resp = fitbit.get(
-                "/1/user/-/activities/steps/date/"
-#                + lastsyncstored
-                + "2023-03-10"
-                + "/"
-#                + endd
-                + "2023-03-13"
-                + ".json"
-            )
+            ############## CONNECT TO DEVICE ENDPOINT #################
+            fpoint = fitbit_data(user)
+            last_sync_stored = fpoint.get_lastsynch()
+            if last_sync_stored != None:
+                lastsyncstored = last_sync_stored.strftime('%Y-%m-%d')
+            else:
+                lastsyncstored = ""
+            resp = fitbit.get("1/user/-/devices.json")
 
             log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
-            steps = resp.json()["activities-steps"]
-            print("steps :", steps)
-            steps_df = pd.json_normalize(steps)
-            steps_columns = ["dateTime","value"]
-            steps_df = _normalize_response2(
-                steps_df, steps_columns, user
-            )
-            steps_df["value"] = pd.to_numeric(steps_df["value"])
-            steps_list.append(steps_df)
 
-##        except (Exception) as e:
- ##               log.error("exception occured: %s", str(e))
+            device_df = pd.json_normalize(resp.json())
+            if not device_df.empty:
+                try:
+                    device_df = device_df.drop(
+                        ["features", "id", "mac", "type"], axis=1
+                    )
+                except:
+                    pass
 
+                device_columns = [
+                    "battery",
+                    "batteryLevel",
+                    "deviceVersion",
+                    "lastSyncTime",
+                ]
+                device_df = _normalize_response(
+                    device_df, device_columns, user, date_pulled
+                )
+                print("last_sync ", device_df["last_sync_time"])
+                fitls = device_df.iloc[0]["last_sync_time"].split('T')
+                fitlastsync = datetime.strptime(fitls[0],'%Y-%m-%d')
+                if lastsyncstored:
+                    startdate = lastsyncstored
+                    delta = datetime.strptime(fitls[0],'%Y-%m-%d') - datetime.strptime(lastsyncstored,'%Y-%m-%d')
+                    enddate = (fitlastsync.date() - timedelta(days=1)).strftime('%Y-%m-%d')
+                    print(fitlastsync.strftime('%Y-%m-%d %H:%M:%S.%f'), startdate, str(delta.days))
+                else:
+                    delta = datetime.strptime(fitls[0], '%Y-%m-%d') - datetime.strptime(_date_pulled(), '%Y-%m-%d')
+                    startdate = (fitlastsync.date() - timedelta(days=1)).strftime('%Y-%m-%d')
+                    enddate = date.today() - timedelta(days=1)
+                device_df["last_sync_time"] = device_df["last_sync_time"].apply(
+                   lambda x: datetime.strptime(x, "%Y-%m-%dT%H:%M:%S.%f")
+                )
+                device_list.append(device_df)
+        except (Exception) as e:
+            log.error("exception occured: %s", str(e))
+
+        try:
+            if delta.days > 0:
+
+                resp = fitbit.get(
+                    "/1/user/-/activities/steps/date/"
+                    + startdate
+                    + "/"
+                    + enddate
+                    + ".json"
+                )
+
+                log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
+                steps = resp.json()["activities-steps"]
+                print("steps :", steps)
+                steps_df = pd.json_normalize(steps)
+                steps_columns = ["dateTime","value"]
+                steps_df = _normalize_response2(
+                    steps_df, steps_columns, user
+                )
+                steps_df["value"] = pd.to_numeric(steps_df["value"])
+                steps_list.append(steps_df)
+        except (Exception) as e:
+            log.error("exception occured: %s", str(e))
 
     # end loop over users
 
@@ -2992,37 +3000,85 @@ def fitbit_lastsynch_grab():
 
     if len(steps_list) > 0:
 
-##        try:
+        try:
 
-        bulk_steps_df = pd.concat(steps_list, axis=0)
-        print(bulk_steps_df.to_string())
-        pandas_gbq.to_gbq(
-            dataframe=bulk_steps_df,
-            destination_table=_tablename("sync_steps"),
-            project_id=project_id,
-            if_exists="append",
-            table_schema=[
-                {
-                    "name": "id",
-                    "type": "STRING",
-                    "mode": "REQUIRED",
-                    "description": "Primary Key",
-                },
-                {
-                    "name": "date_time",
-                    "type": "DATE",
-                    "mode": "REQUIRED",
-                    "description": "The date values were extracted",
-                },
-                {
-                    "name": "value",
-                    "type": "INTEGER",
-                    "description": "Number of steps at this time",
-                }
-            ],
-        )
-##        except (Exception) as e:
-##            log.error("exception occured: %s", str(e))
+            bulk_steps_df = pd.concat(steps_list, axis=0)
+            print(bulk_steps_df.to_string())
+            pandas_gbq.to_gbq(
+                dataframe=bulk_steps_df,
+                destination_table=_tablename("sync_steps"),
+                project_id=project_id,
+                if_exists="append",
+                table_schema=[
+                    {
+                        "name": "id",
+                        "type": "STRING",
+                        "mode": "REQUIRED",
+                        "description": "Primary Key",
+                    },
+                    {
+                        "name": "date_time",
+                        "type": "DATE",
+                        "mode": "REQUIRED",
+                        "description": "The date values were extracted",
+                    },
+                    {
+                        "name": "value",
+                        "type": "INTEGER",
+                        "description": "Number of steps at this time",
+                    }
+                ],
+            )
+        except (Exception) as e:
+            log.error("exception occured: %s", str(e))
+
+    if len(device_list) > 0:
+
+        try:
+
+            bulk_device_df = pd.concat(device_list, axis=0)
+
+            pandas_gbq.to_gbq(
+                dataframe=bulk_device_df,
+                destination_table=_tablename("device"),
+                project_id=project_id,
+                if_exists="append",
+                table_schema=[
+                    {
+                        "name": "id",
+                        "type": "STRING",
+                        "description": "Primary Key",
+                    },
+                    {
+                        "name": "date",
+                        "type": "DATE",
+                        "description": "The date values were extracted",
+                    },
+                    {
+                        "name": "battery",
+                        "type": "STRING",
+                        "description": "Returns the battery level of the device. Supported: High | Medium | Low | Empty",
+                    },
+                    {
+                        "name": "battery_level",
+                        "type": "INTEGER",
+                        "description": "Returns the battery level percentage of the device.",
+                    },
+                    {
+                        "name": "device_version",
+                        "type": "STRING",
+                        "description": "The product name of the device.",
+                    },
+                    {
+                        "name": "last_sync_time",
+                        "type": "TIMESTAMP",
+                        "description": "Timestamp representing the last time the device was sync'd with the Fitbit mobile application.",
+                    },
+                ],
+            )
+
+        except (Exception) as e:
+            log.error("exception occured: %s", str(e))
 
     fitbit_bp.storage.user = None
 
