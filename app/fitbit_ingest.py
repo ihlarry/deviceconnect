@@ -2957,7 +2957,7 @@ def fitbit_lastsynch_grab():
         try:
 
             if delta.days > 0:
-                enddate = fitlastsync.date() - datetime.timedelta(days=1)
+                enddate = fitlastsync.date() - timedelta(days=1)
                 resp = fitbit.get(
                     "/1/user/-/activities/steps/date/"
                     + lastsyncstored
