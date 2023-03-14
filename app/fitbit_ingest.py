@@ -2958,11 +2958,12 @@ def fitbit_lastsynch_grab():
 
             if delta.days > 0:
                 enddate = fitlastsync.date() - timedelta(days=1)
+                endd = enddate.strftime('%Y-%m-%d')
                 resp = fitbit.get(
                     "/1/user/-/activities/steps/date/"
                     + lastsyncstored
                     + "/"
-                    + enddate
+                    + endd
                     + ".json"
                 )
 
