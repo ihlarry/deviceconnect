@@ -2992,7 +2992,7 @@ def fitbit_lastsynch_grab():
 ##        try:
 
         bulk_steps_df = pd.concat(steps_list, axis=0)
-
+        print(bulk_steps_df.to_string())
         pandas_gbq.to_gbq(
             dataframe=bulk_steps_df,
             destination_table=_tablename("sync_steps"),
