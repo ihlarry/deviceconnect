@@ -2969,6 +2969,7 @@ def fitbit_lastsynch_grab():
 
             log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
             steps = resp.json()["activities-steps"]
+            print("steps :", steps)
             steps_df = pd.json_normalize(steps)
             steps_columns = ["dateTime","value"]
             steps_df = _normalize_response2(
