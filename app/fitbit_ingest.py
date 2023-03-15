@@ -2902,6 +2902,7 @@ def fitbit_lastsynch_grab():
 
     steps_list = []
     device_list = []
+    cs_list = []
 
 
 
@@ -2989,6 +2990,33 @@ def fitbit_lastsynch_grab():
                 )
                 steps_df["value"] = pd.to_numeric(steps_df["value"])
                 steps_list.append(steps_df)
+        except (Exception) as e:
+            log.error("exception occured: %s", str(e))
+
+        ## get vo2max
+        try:
+            if delta.days == 0:
+
+                resp = fitbit.get(
+                    "/1/user/[user-id]/cardioscore/date/"
+                    + "2023-03-01"
+                    + "/"
+                    + "2023-03-14"
+                    + ".json"
+                )
+
+                log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
+                cardioscore = resp.json()["cardioScore"]
+                print("cardio :", cardioscore)
+                cs_df = pd.json_normalize2(cardioscore)
+                cs_columns = ["dateTime",
+                              "value.vo2Max"]
+                cs_df = _normalize_response2(
+                    cs_df, cs_columns, user
+                )
+                print(cs.df.to_string())
+#                cs_df["value"] = pd.to_numeric(steps_df["value"])
+#                cs_list.append(cs_df)
         except (Exception) as e:
             log.error("exception occured: %s", str(e))
 
@@ -3111,3 +3139,5 @@ class fitbit_data():
             print(row.last_sync_time)
             last_sync_stored = row.last_sync_time
         return last_sync_stored
+
+
