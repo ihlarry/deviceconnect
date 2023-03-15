@@ -2998,7 +2998,7 @@ def fitbit_lastsynch_grab():
             if delta.days == 0:
 
                 resp = fitbit.get(
-                    "/1/user/[user-id]/cardioscore/date/"
+                    "/1/user/-/cardioscore/date/"
                     + "2023-03-01"
                     + "/"
                     + "2023-03-14"
