@@ -3008,7 +3008,7 @@ def fitbit_lastsynch_grab():
             log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
             cardioscore = resp.json()["cardioScore"]
             print("cardio :", cardioscore)
-            cs_df = pd.json_normalize2(cardioscore)
+            cs_df = pd.json_normalize(cardioscore)
             cs_columns = ["dateTime",
                           "value.vo2Max"]
             cs_df = _normalize_response2(
