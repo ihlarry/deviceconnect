@@ -2994,31 +2994,31 @@ def fitbit_lastsynch_grab():
             log.error("exception occured: %s", str(e))
 
         ## get vo2max
-        try:
-            if delta.days == 0:
+#        try:
+        if delta.days == 0:
 
-                resp = fitbit.get(
-                    "/1/user/-/cardioscore/date/"
-                    + "2023-03-01"
-                    + "/"
-                    + "2023-03-14"
-                    + ".json"
-                )
+            resp = fitbit.get(
+                "/1/user/-/cardioscore/date/"
+                + "2023-03-01"
+                + "/"
+                + "2023-03-14"
+                + ".json"
+            )
 
-                log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
-                cardioscore = resp.json()["cardioScore"]
-                print("cardio :", cardioscore)
-                cs_df = pd.json_normalize2(cardioscore)
-                cs_columns = ["dateTime",
-                              "value.vo2Max"]
-                cs_df = _normalize_response2(
-                    cs_df, cs_columns, user
-                )
-                print(cs.df.to_string())
+            log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
+            cardioscore = resp.json()["cardioScore"]
+            print("cardio :", cardioscore)
+            cs_df = pd.json_normalize2(cardioscore)
+            cs_columns = ["dateTime",
+                          "value.vo2Max"]
+            cs_df = _normalize_response2(
+                cs_df, cs_columns, user
+            )
+            print(cs_df.to_string())
 #                cs_df["value"] = pd.to_numeric(steps_df["value"])
 #                cs_list.append(cs_df)
-        except (Exception) as e:
-            log.error("exception occured: %s", str(e))
+#        except (Exception) as e:
+#            log.error("exception occured: %s", str(e))
 
     # end loop over users
 
