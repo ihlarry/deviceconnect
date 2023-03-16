@@ -2994,31 +2994,28 @@ def fitbit_lastsynch_grab():
             log.error("exception occured: %s", str(e))
 
         ## get vo2max
-#        try:
-        if delta.days == 0:
+        try:
+            if delta.days > 0:
 
-            resp = fitbit.get(
-                "/1/user/-/cardioscore/date/"
-                + "2023-03-01"
-                + "/"
-                + "2023-03-14"
-                + ".json"
-            )
+                resp = fitbit.get(
+                    "/1/user/-/cardioscore/date/"
+                    + startdate
+                    + "/"
+                    + enddate
+                    + ".json"
+                )
 
-            log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
-            cardioscore = resp.json()["cardioScore"]
-            print("cardio :", cardioscore)
-            cs_df = pd.json_normalize(cardioscore)
-            cs_columns = ["dateTime",
-                          "value.vo2Max"]
-            cs_df = _normalize_response2(
-                cs_df, cs_columns, user
-            )
-            print(cs_df.to_string())
-#                cs_df["value"] = pd.to_numeric(steps_df["value"])
-#                cs_list.append(cs_df)
-#        except (Exception) as e:
-#            log.error("exception occured: %s", str(e))
+                log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
+                cardioscore = resp.json()["cardioScore"]
+                cs_df = pd.json_normalize(cardioscore)
+                cs_columns = ["dateTime",
+                              "value.vo2Max"]
+                cs_df = _normalize_response2(
+                    cs_df, cs_columns, user
+                )
+                cs_list.append(cs_df)
+        except (Exception) as e:
+            log.error("exception occured: %s", str(e))
 
     # end loop over users
 
@@ -3053,6 +3050,40 @@ def fitbit_lastsynch_grab():
                     {
                         "name": "value",
                         "type": "INTEGER",
+                        "description": "Number of steps at this time",
+                    }
+                ],
+            )
+        except (Exception) as e:
+            log.error("exception occured: %s", str(e))
+
+    if len(cs_list) > 0:
+
+        try:
+
+            bulk_cs_df = pd.concat(cs_list, axis=0)
+            print(bulk_cs_df.to_string())
+            pandas_gbq.to_gbq(
+                dataframe=bulk_cs_df,
+                destination_table=_tablename("vo2max"),
+                project_id=project_id,
+                if_exists="append",
+                table_schema=[
+                    {
+                        "name": "id",
+                        "type": "STRING",
+                        "mode": "REQUIRED",
+                        "description": "Primary Key",
+                    },
+                    {
+                        "name": "date_time",
+                        "type": "DATE",
+                        "mode": "REQUIRED",
+                        "description": "The date values were extracted",
+                    },
+                    {
+                        "name": "value_vo_2_max",
+                        "type": "STRING",
                         "description": "Number of steps at this time",
                     }
                 ],
