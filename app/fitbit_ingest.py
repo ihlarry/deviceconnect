@@ -3020,7 +3020,7 @@ def fitbit_lastsynch_grab():
 
         ## get activity zone minutes
         try:
-            if delta.days == 0:
+            if delta.days > 0:
 
                 resp = fitbit.get(
                     "/1/user/-/activities/active-zone-minutes/date/"
