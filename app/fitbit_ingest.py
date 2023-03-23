@@ -3119,37 +3119,37 @@ def fitbit_lastsynch_grab():
 
     if len(azm_list) > 0:
 
-        try:
+ #       try:
 
-            bulk_azm_df = pd.concat(azm_list, axis=0)
-            print(bulk_azm_df.to_string())
-            pandas_gbq.to_gbq(
-                dataframe=bulk_azm_df,
-                destination_table=_tablename("activezoneminutes"),
-                project_id=project_id,
-                if_exists="append",
-                table_schema=[
-                    {
-                        "name": "id",
-                        "type": "STRING",
-                        "mode": "REQUIRED",
-                        "description": "Primary Key"
-                    },
-                    {
-                        "name": "date_time",
-                        "type": "DATE",
-                        "mode": "REQUIRED",
-                        "description": "The date values were extracted"
-                    },
-                    {
-                        "name": "value_active_zone_minutes",
-                        "type": "STRING",
-                        "description": "Number daily active zone minutes"
-                    }
-                ],
-            )
-        except (Exception) as e:
-            log.error("exception occured: %s", str(e))
+        bulk_azm_df = pd.concat(azm_list, axis=0)
+        print(bulk_azm_df.to_string())
+        pandas_gbq.to_gbq(
+            dataframe=bulk_azm_df,
+            destination_table=_tablename("activezoneminutes"),
+            project_id=project_id,
+            if_exists="append",
+            table_schema=[
+                {
+                    "name": "id",
+                    "type": "STRING",
+                    "mode": "REQUIRED",
+                    "description": "Primary Key"
+                },
+                {
+                    "name": "date_time",
+                    "type": "DATE",
+                    "mode": "REQUIRED",
+                    "description": "The date values were extracted"
+                },
+                {
+                    "name": "value_active_zone_minutes",
+                    "type": "INTEGER",
+                    "description": "Number daily active zone minutes"
+                }
+            ],
+        )
+#        except (Exception) as e:
+#            log.error("exception occured: %s", str(e))
 
     if len(device_list) > 0:
 
