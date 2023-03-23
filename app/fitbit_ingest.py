@@ -3019,29 +3019,28 @@ def fitbit_lastsynch_grab():
             log.error("exception occured: %s", str(e))
 
         ## get activity zone minutes
- #       try:
-        if delta.days == 0:
+        try:
+            if delta.days == 0:
 
-            resp = fitbit.get(
-                "/1/user/-/activities/active-zone-minutes/date/"
-                + "2023-01-15"
-                + "/"
-                + "2023-03-22"
-                + ".json"
-            )
+                resp = fitbit.get(
+                    "/1/user/-/activities/active-zone-minutes/date/"
+                    + "2023-01-15"
+                    + "/"
+                    + "2023-03-22"
+                    + ".json"
+                )
 
-            log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
-            print(resp.json)
-            azm = resp.json()["activities-active-zone-minutes"]
-            azm_df = pd.json_normalize(azm)
-            azm_columns = ["dateTime",
-                          "value.activeZoneMinutes"]
-            azm_df = _normalize_response2(
-                azm_df, azm_columns, user
-            )
-            azm_list.append(azm_df)
-#        except (Exception) as e:
-#            log.error("exception occured: %s", str(e))
+                log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
+                azm = resp.json()["activities-active-zone-minutes"]
+                azm_df = pd.json_normalize(azm)
+                azm_columns = ["dateTime",
+                              "value.activeZoneMinutes"]
+                azm_df = _normalize_response2(
+                    azm_df, azm_columns, user
+                )
+                azm_list.append(azm_df)
+        except (Exception) as e:
+            log.error("exception occured: %s", str(e))
 
     # end loop over users
 
@@ -3054,7 +3053,6 @@ def fitbit_lastsynch_grab():
         try:
 
             bulk_steps_df = pd.concat(steps_list, axis=0)
-            print(bulk_steps_df.to_string())
             pandas_gbq.to_gbq(
                 dataframe=bulk_steps_df,
                 destination_table=_tablename("sync_steps"),
@@ -3088,7 +3086,6 @@ def fitbit_lastsynch_grab():
         try:
 
             bulk_cs_df = pd.concat(cs_list, axis=0)
-            print(bulk_cs_df.to_string())
             pandas_gbq.to_gbq(
                 dataframe=bulk_cs_df,
                 destination_table=_tablename("vo2max"),
@@ -3119,37 +3116,36 @@ def fitbit_lastsynch_grab():
 
     if len(azm_list) > 0:
 
- #       try:
+        try:
 
-        bulk_azm_df = pd.concat(azm_list, axis=0)
-        print(bulk_azm_df.to_string())
-        pandas_gbq.to_gbq(
-            dataframe=bulk_azm_df,
-            destination_table=_tablename("activezoneminutes"),
-            project_id=project_id,
-            if_exists="append",
-            table_schema=[
-                {
-                    "name": "id",
-                    "type": "STRING",
-                    "mode": "REQUIRED",
-                    "description": "Primary Key"
-                },
-                {
-                    "name": "date_time",
-                    "type": "DATE",
-                    "mode": "REQUIRED",
-                    "description": "The date values were extracted"
-                },
-                {
-                    "name": "value_active_zone_minutes",
-                    "type": "INTEGER",
-                    "description": "Number daily active zone minutes"
-                }
-            ],
-        )
-#        except (Exception) as e:
-#            log.error("exception occured: %s", str(e))
+            bulk_azm_df = pd.concat(azm_list, axis=0)
+            pandas_gbq.to_gbq(
+                dataframe=bulk_azm_df,
+                destination_table=_tablename("activezoneminutes"),
+                project_id=project_id,
+                if_exists="append",
+                table_schema=[
+                    {
+                        "name": "id",
+                        "type": "STRING",
+                        "mode": "REQUIRED",
+                        "description": "Primary Key"
+                    },
+                    {
+                        "name": "date_time",
+                        "type": "DATE",
+                        "mode": "REQUIRED",
+                        "description": "The date values were extracted"
+                    },
+                    {
+                        "name": "value_active_zone_minutes",
+                        "type": "INTEGER",
+                        "description": "Number daily active zone minutes"
+                    }
+                ],
+            )
+        except (Exception) as e:
+            log.error("exception occured: %s", str(e))
 
     if len(device_list) > 0:
 
