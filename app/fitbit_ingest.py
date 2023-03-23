@@ -3019,28 +3019,29 @@ def fitbit_lastsynch_grab():
             log.error("exception occured: %s", str(e))
 
         ## get activity zone minutes
-        try:
-            if delta.days == 0:
+ #       try:
+        if delta.days == 0:
 
-                resp = fitbit.get(
-                    "/1/user/-/activities/active-zone-minutes/date/"
-                    + "2023-01-15"
-                    + "/"
-                    + "2023-03-22"
-                    + ".json"
-                )
+            resp = fitbit.get(
+                "/1/user/-/activities/active-zone-minutes/date/"
+                + "2023-01-15"
+                + "/"
+                + "2023-03-22"
+                + ".json"
+            )
 
-                log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
-                azm = resp.json()["activities-active-zone-minutes"]
-                azm_df = pd.json_normalize(azm)
-                azm_columns = ["dateTime",
-                              "value.activeZoneMinutes"]
-                azm_df = _normalize_response2(
-                    azm_df, azm_columns, user
-                )
-                azm_list.append(azm_df)
-        except (Exception) as e:
-            log.error("exception occured: %s", str(e))
+            log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
+            print(resp.json)
+            azm = resp.json()["activities-active-zone-minutes"]
+            azm_df = pd.json_normalize(azm)
+            azm_columns = ["dateTime",
+                          "value.activeZoneMinutes"]
+            azm_df = _normalize_response2(
+                azm_df, azm_columns, user
+            )
+            azm_list.append(azm_df)
+#        except (Exception) as e:
+#            log.error("exception occured: %s", str(e))
 
     # end loop over users
 
