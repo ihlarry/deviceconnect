@@ -3120,10 +3120,10 @@ def fitbit_lastsynch_grab():
 
         try:
 
-            bulk_cs_df = pd.concat(cs_list, axis=0)
-            print(bulk_cs_df.to_string())
+            bulk_azm_df = pd.concat(azm_list, axis=0)
+            print(bulk_azm_df.to_string())
             pandas_gbq.to_gbq(
-                dataframe=bulk_cs_df,
+                dataframe=bulk_azm_df,
                 destination_table=_tablename("activezoneminutes"),
                 project_id=project_id,
                 if_exists="append",
