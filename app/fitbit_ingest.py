@@ -3026,7 +3026,7 @@ def fitbit_lastsynch_grab():
                     "/1/user/-/activities/active-zone-minutes/date/"
                     + "2023-01-15"
                     + "/"
-                    + "2023-03-23"
+                    + "2023-03-24"
                     + ".json"
                 )
 
