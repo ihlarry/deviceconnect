@@ -3227,4 +3227,3 @@ class fitbit_data():
             last_sync_stored = row.last_sync_time
         return last_sync_stored
 
-
