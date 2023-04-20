@@ -2971,13 +2971,13 @@ def fitbit_lastsynch_grab():
             log.error("exception occured: %s", str(e))
 
         try:
-            if delta.days == 0:
+            if delta.days > 0:
 
                 resp = fitbit.get(
                     "/1/user/-/activities/steps/date/"
-                    + "2022-12-11"
+                    + startdate
                     + "/"
-                    + "2023-04-19"
+                    + enddate
                     + ".json"
                 )
 
