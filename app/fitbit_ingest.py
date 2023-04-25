@@ -2904,6 +2904,7 @@ def fitbit_lastsynch_grab():
     device_list = []
     cs_list = []
     azm_list = []
+    hr_zones_list = []
 
 
 
@@ -2985,7 +2986,7 @@ def fitbit_lastsynch_grab():
                 steps = resp.json()["activities-steps"]
                 print("steps :", steps)
                 steps_df = pd.json_normalize(steps)
-                steps_columns = ["dateTime","value"]
+                steps_columns = ["dateTime", "value"]
                 steps_df = _normalize_response2(
                     steps_df, steps_columns, user
                 )
@@ -2993,6 +2994,271 @@ def fitbit_lastsynch_grab():
                 steps_list.append(steps_df)
         except (Exception) as e:
             log.error("exception occured: %s", str(e))
+
+        ## get heart rate zones
+#        try:
+        if delta.days == 0:
+            resp = fitbit.get(
+                "1/user/-/activities/heart/date/"
+                + "2022-12-11"
+                + "/"
+                + "2023-12-11"
+                + ".json"
+            )
+
+            log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
+            date_in = resp.json()["activities-heart"][0]["dateTime"]
+            hr_zones = resp.json()["activities-heart"][0]["value"]
+            zone_list = ["Out of Range", "Fat Burn", "Cardio", "Peak"]
+            hr_zones_columns = [
+                "out_of_range_calories_out",
+                "out_of_range_minutes",
+                "out_of_range_min_hr",
+                "out_of_range_max_hr",
+                "fat_burn_calories_out",
+                "fat_burn_minutes",
+                "fat_burn_min_hr",
+                "fat_burn_max_hr",
+                "cardio_calories_out",
+                "cardio_minutes",
+                "cardio_min_hr",
+                "cardio_max_hr",
+                "peak_calories_out",
+                "peak_minutes",
+                "peak_min_hr",
+                "peak_max_hr",
+                "below_calories_out",
+                "below_minutes",
+                "below_min_hr",
+                "below_max_hr",
+                "custom_zone_calories_out",
+                "custom_zone_minutes",
+                "custom_zone_min_hr",
+                "custom_zone_max_hr",
+                "above_calories_out",
+                "above__minutes",
+                "above__min_hr",
+                "above_max_hr"
+            ]
+            hr_zones_df = pd.json_normalize(hr_zones)
+            if 'customHeartRateZone' not in hr_zones:
+                user_activity_zone = pd.DataFrame(
+                    {
+                        hr_zones["heartRateZones"][0]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_calories_out": hr_zones["heartRateZones"][0][
+                            "caloriesOut"
+                        ],
+                        hr_zones["heartRateZones"][0]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_minutes": hr_zones["heartRateZones"][0]["minutes"],
+                        hr_zones["heartRateZones"][0]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_min_hr": hr_zones["heartRateZones"][0]["min"],
+                        hr_zones["heartRateZones"][0]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_max_hr": hr_zones["heartRateZones"][0]["max"],
+                        hr_zones["heartRateZones"][1]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_calories_out": hr_zones["heartRateZones"][1][
+                            "caloriesOut"
+                        ],
+                        hr_zones["heartRateZones"][1]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_minutes": hr_zones["heartRateZones"][1]["minutes"],
+                        hr_zones["heartRateZones"][1]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_min_hr": hr_zones["heartRateZones"][1]["min"],
+                        hr_zones["heartRateZones"][1]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_max_hr": hr_zones["heartRateZones"][1]["max"],
+                        hr_zones["heartRateZones"][2]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_calories_out": hr_zones["heartRateZones"][2][
+                            "caloriesOut"
+                        ],
+                        hr_zones["heartRateZones"][2]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_minutes": hr_zones["heartRateZones"][2]["minutes"],
+                        hr_zones["heartRateZones"][2]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_min_hr": hr_zones["heartRateZones"][2]["min"],
+                        hr_zones["heartRateZones"][2]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_max_hr": hr_zones["heartRateZones"][2]["max"],
+                        hr_zones["heartRateZones"][3]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_calories_out": hr_zones["heartRateZones"][3][
+                            "caloriesOut"
+                        ],
+                        hr_zones["heartRateZones"][3]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_minutes": hr_zones["heartRateZones"][3]["minutes"],
+                        hr_zones["heartRateZones"][3]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_min_hr": hr_zones["heartRateZones"][3]["min"],
+                        hr_zones["heartRateZones"][3]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_max_hr": hr_zones["heartRateZones"][3]["max"],
+                    },
+                    index=[0],
+                )
+            else:
+                user_activity_zone = pd.DataFrame(
+                    {
+                        hr_zones["heartRateZones"][0]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_calories_out": hr_zones["heartRateZones"][0][
+                            "caloriesOut"
+                        ],
+                        hr_zones["heartRateZones"][0]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_minutes": hr_zones["heartRateZones"][0]["minutes"],
+                        hr_zones["heartRateZones"][0]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_min_hr": hr_zones["heartRateZones"][0]["min"],
+                        hr_zones["heartRateZones"][0]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_max_hr": hr_zones["heartRateZones"][0]["max"],
+                        hr_zones["heartRateZones"][1]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_calories_out": hr_zones["heartRateZones"][1][
+                            "caloriesOut"
+                        ],
+                        hr_zones["heartRateZones"][1]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_minutes": hr_zones["heartRateZones"][1]["minutes"],
+                        hr_zones["heartRateZones"][1]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_min_hr": hr_zones["heartRateZones"][1]["min"],
+                        hr_zones["heartRateZones"][1]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_max_hr": hr_zones["heartRateZones"][1]["max"],
+                        hr_zones["heartRateZones"][2]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_calories_out": hr_zones["heartRateZones"][2][
+                            "caloriesOut"
+                        ],
+                        hr_zones["heartRateZones"][2]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_minutes": hr_zones["heartRateZones"][2]["minutes"],
+                        hr_zones["heartRateZones"][2]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_min_hr": hr_zones["heartRateZones"][2]["min"],
+                        hr_zones["heartRateZones"][2]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_max_hr": hr_zones["heartRateZones"][2]["max"],
+                        hr_zones["heartRateZones"][3]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_calories_out": hr_zones["heartRateZones"][3][
+                            "caloriesOut"
+                        ],
+                        hr_zones["heartRateZones"][3]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_minutes": hr_zones["heartRateZones"][3]["minutes"],
+                        hr_zones["heartRateZones"][3]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_min_hr": hr_zones["heartRateZones"][3]["min"],
+                        hr_zones["heartRateZones"][3]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_max_hr": hr_zones["heartRateZones"][3]["max"],
+                        hr_zones["customHeartRateZones"][0]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_calories_out": hr_zones["customHeartRateZones"][0][
+                            "caloriesOut"
+                        ],
+                        hr_zones["customHeartRateZones"][0]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_minutes": hr_zones["customHeartRateZones"][0]["minutes"],
+                        hr_zones["customHeartRateZones"][0]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_min_hr": hr_zones["customHeartRateZones"][0]["min"],
+                        hr_zones["customHeartRateZones"][0]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_max_hr": hr_zones["customHeartRateZones"][0]["max"],
+                        hr_zones["customHeartRateZones"][1]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_calories_out": hr_zones["customHeartRateZones"][1][
+                            "caloriesOut"
+                        ],
+                        hr_zones["customHeartRateZones"][1]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_minutes": hr_zones["customHeartRateZones"][1]["minutes"],
+                        hr_zones["customHeartRateZones"][1]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_min_hr": hr_zones["customHeartRateZones"][1]["min"],
+                        hr_zones["customHeartRateZones"][1]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_max_hr": hr_zones["customHeartRateZones"][1]["max"],
+                        hr_zones["customHeartRateZones"][2]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_calories_out": hr_zones["customHeartRateZones"][2][
+                            "caloriesOut"
+                        ],
+                        hr_zones["customHeartRateZones"][2]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_minutes": hr_zones["customHeartRateZones"][2]["minutes"],
+                        hr_zones["customHeartRateZones"][2]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_min_hr": hr_zones["customHeartRateZones"][2]["min"],
+                        hr_zones["customHeartRateZones"][2]["name"]
+                        .replace(" ", "_")
+                        .lower()
+                        + "_max_hr": hr_zones["customHeartRateZones"][2]["max"],
+                    },
+                    index=[0],
+                )
+
+            user_activity_zone.insert(0, "id", user)
+            user_activity_zone["resting_heart_rate"] = hr_zones["restingHeartRate"]
+            user_activity_zone["date"] = date_in
+            user_activity_zone["date_time"] = datetime.now()
+            hr_zones_list.append(user_activity_zone)
+#        except (Exception) as e:
+#            log.error("exception occured: %s", str(e))
 
         ## get vo2max
         try:
@@ -3080,6 +3346,172 @@ def fitbit_lastsynch_grab():
             )
         except (Exception) as e:
             log.error("exception occured: %s", str(e))
+
+    if len(hr_zones_list) > 0:
+
+ #       try:
+
+        bulk_hr_zones_df = pd.concat(hr_zones_list, axis=0)
+        pandas_gbq.to_gbq(
+            dataframe=bulk_hr_zones_df,
+            destination_table=_tablename("sync_heart_rate_zones"),
+            project_id=project_id,
+            if_exists="append",
+            table_schema=[
+                {
+                    "name": "id",
+                    "type": "STRING",
+                    "description": "Primary Key",
+                },
+                {
+                    "name": "date",
+                    "type": "DATE",
+                    "description": "The date values were extracted",
+                },
+                {
+                    "name": "out_of_range_calories_out",
+                    "type": "FLOAT",
+                    "description": "Number calories burned with the specified heart rate zone.",
+                },
+                {
+                    "name": "out_of_range_minutes",
+                    "type": "INTEGER",
+                    "description": "Number calories burned with the specified heart rate zone.",
+                },
+                {
+                    "name": "out_of_range_min_hr",
+                    "type": "INTEGER",
+                    "description": "Minimum range for the heart rate zone.",
+                },
+                {
+                    "name": "out_of_range_max_hr",
+                    "type": "INTEGER",
+                    "description": "Maximum range for the heart rate zone.",
+                },
+                {
+                    "name": "fat_burn_calories_out",
+                    "type": "FLOAT",
+                    "description": "Number calories burned with the specified heart rate zone.",
+                },
+                {
+                    "name": "fat_burn_minutes",
+                    "type": "INTEGER",
+                    "description": "Number calories burned with the specified heart rate zone.",
+                },
+                {
+                    "name": "fat_burn_min_hr",
+                    "type": "INTEGER",
+                    "description": "Minimum range for the heart rate zone.",
+                },
+                {
+                    "name": "fat_burn_max_hr",
+                    "type": "INTEGER",
+                    "description": "Maximum range for the heart rate zone.",
+                },
+                {
+                    "name": "cardio_calories_out",
+                    "type": "FLOAT",
+                    "description": "Number calories burned with the specified heart rate zone.",
+                },
+                {
+                    "name": "cardio_minutes",
+                    "type": "INTEGER",
+                    "description": "Number calories burned with the specified heart rate zone.",
+                },
+                {
+                    "name": "cardio_min_hr",
+                    "type": "INTEGER",
+                    "description": "Minimum range for the heart rate zone.",
+                },
+                {
+                    "name": "cardio_max_hr",
+                    "type": "INTEGER",
+                    "description": "Maximum range for the heart rate zone.",
+                },
+                {
+                    "name": "peak_calories_out",
+                    "type": "FLOAT",
+                    "description": "Number calories burned with the specified heart rate zone.",
+                },
+                {
+                    "name": "peak_minutes",
+                    "type": "INTEGER",
+                    "description": "Number calories burned with the specified heart rate zone.",
+                },
+                {
+                    "name": "peak_min_hr",
+                    "type": "INTEGER",
+                    "description": "Minimum range for the heart rate zone.",
+                },
+                {
+                    "name": "peak_max_hr",
+                    "type": "INTEGER",
+                    "description": "Maximum range for the heart rate zone.",
+                },
+                {
+                    "name": "below_calories_out",
+                    "type": "FLOAT",
+                    "description": "Number calories burned with the specified heart rate zone.",
+                },
+                {
+                    "name": "below_minutes",
+                    "type": "INTEGER",
+                    "description": "Number calories burned with the specified heart rate zone.",
+                },
+                {
+                    "name": "below_min_hr",
+                    "type": "INTEGER",
+                    "description": "Minimum range for the heart rate zone.",
+                },
+                {
+                    "name": "below_max_hr",
+                    "type": "INTEGER",
+                    "description": "Maximum range for the heart rate zone.",
+                },
+                {
+                    "name": "custom_zone_calories_out",
+                    "type": "FLOAT",
+                    "description": "Number calories burned with the specified heart rate zone.",
+                },
+                {
+                    "name": "custom_zone_minutes",
+                    "type": "INTEGER",
+                    "description": "Number calories burned with the specified heart rate zone.",
+                },
+                {
+                    "name": "custom_zone_min_hr",
+                    "type": "INTEGER",
+                    "description": "Minimum range for the heart rate zone.",
+                },
+                {
+                    "name": "custom_zone_max_hr",
+                    "type": "INTEGER",
+                    "description": "Maximum range for the heart rate zone.",
+                },
+                {
+                    "name": "above_calories_out",
+                    "type": "FLOAT",
+                    "description": "Number calories burned with the specified heart rate zone.",
+                },
+                {
+                    "name": "above_minutes",
+                    "type": "INTEGER",
+                    "description": "Number calories burned with the specified heart rate zone.",
+                },
+                {
+                    "name": "above_min_hr",
+                    "type": "INTEGER",
+                    "description": "Minimum range for the heart rate zone.",
+                },
+                {
+                    "name": "above_max_hr",
+                    "type": "INTEGER",
+                    "description": "Maximum range for the heart rate zone.",
+                },
+            ],
+        )
+#        except (Exception) as e:
+#           log.error("exception occured: %s", str(e))
 
     if len(cs_list) > 0:
 
