@@ -2996,7 +2996,7 @@ def fitbit_lastsynch_grab():
 
         ## get heart rate zones
 #        try:
-        if delta.days > 0:
+        if delta.days == 0:
             resp = fitbit.get(
                 "1/user/-/activities/heart/date/"
                 + "2022-12-11"
