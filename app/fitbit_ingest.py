@@ -3007,6 +3007,7 @@ def fitbit_lastsynch_grab():
             hrz_list = []
             log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
             for item in resp.json()["activities-heart"]:
+                print(item)
                 dict_in = {}
                 dict_in["id"] = user
                 dict_in["date"] = item["dateTime"]
