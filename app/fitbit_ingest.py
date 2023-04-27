@@ -3046,6 +3046,7 @@ def fitbit_lastsynch_grab():
 
             hr_df = pd.DataFrame(hrz_list)
             hr_zones_list.append(hr_df)
+            print(hr_zones_list)
 #        except (Exception) as e:
 #            log.error("exception occured: %s", str(e))
 
