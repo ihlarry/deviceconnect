@@ -3040,6 +3040,19 @@ def fitbit_lastsynch_grab():
                     dict_in["above_minutes"] = item["value"]["customHeartRateZones"][2]["minutes"]
                     dict_in["above_min_hr"] = item["value"]["customHeartRateZones"][2]["min"]
                     dict_in["above_range_max_hr"] = item["value"]["customHeartRateZones"][2]["max"]
+                else:
+                    dict_in["below_calories_out"] = None
+                    dict_in["below_minutes"] = None
+                    dict_in["below_min_hr"] = None
+                    dict_in["below_max_hr"] = None
+                    dict_in["custom_zone_calories_out"] = None
+                    dict_in["custom_zone_minutes"] = None
+                    dict_in["custom_zone_min_hr"] = None
+                    dict_in["custom_zone_range_max_hr"] = None
+                    dict_in["above_calories_out"] = None
+                    dict_in["above_minutes"] = None
+                    dict_in["above_min_hr"] = None
+                    dict_in["above_range_max_hr"] = None
                 dict_in["resting_heart_rate"] = item["value"]["restingHeartRate"]
                 dict_in["date_time"] = datetime.now()
                 hrz_list.append(dict_in)
