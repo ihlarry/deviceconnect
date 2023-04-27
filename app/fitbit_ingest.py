@@ -3018,15 +3018,15 @@ def fitbit_lastsynch_grab():
                 dict_in["fat_burn_calories_out"] = item["value"]["heartRateZones"][1]["caloriesOut"]
                 dict_in["fat_burn_minutes"] = item["value"]["heartRateZones"][1]["minutes"]
                 dict_in["fat_burn_min_hr"] = item["value"]["heartRateZones"][1]["min"]
-                dict_in["fat_burn_range_max_hr"] = item["value"]["heartRateZones"][1]["max"]
+                dict_in["fat_burn_max_hr"] = item["value"]["heartRateZones"][1]["max"]
                 dict_in["cardio_calories_out"] = item["value"]["heartRateZones"][2]["caloriesOut"]
                 dict_in["cardio_minutes"] = item["value"]["heartRateZones"][2]["minutes"]
                 dict_in["cardio_min_hr"] = item["value"]["heartRateZones"][2]["min"]
-                dict_in["cardio_range_max_hr"] = item["value"]["heartRateZones"][2]["max"]
+                dict_in["cardio_max_hr"] = item["value"]["heartRateZones"][2]["max"]
                 dict_in["peak_calories_out"] = item["value"]["heartRateZones"][3]["caloriesOut"]
                 dict_in["peak_minutes"] = item["value"]["heartRateZones"][3]["minutes"]
                 dict_in["peak_min_hr"] = item["value"]["heartRateZones"][3]["min"]
-                dict_in["peak_range_max_hr"] = item["value"]["heartRateZones"][3]["max"]
+                dict_in["peak_max_hr"] = item["value"]["heartRateZones"][3]["max"]
                 if len(item["value"]["customHeartRateZones"]) > 0:
                     dict_in["below_calories_out"] = item["value"]["customHeartRateZones"][0]["caloriesOut"]
                     dict_in["below_minutes"] = item["value"]["customHeartRateZones"][0]["minutes"]
@@ -3035,11 +3035,11 @@ def fitbit_lastsynch_grab():
                     dict_in["custom_zone_calories_out"] = item["value"]["customHeartRateZones"][1]["caloriesOut"]
                     dict_in["custom_zone_minutes"] = item["value"]["customHeartRateZones"][1]["minutes"]
                     dict_in["custom_zone_min_hr"] = item["value"]["customHeartRateZones"][1]["min"]
-                    dict_in["custom_zone_range_max_hr"] = item["value"]["customHeartRateZones"][1]["max"]
+                    dict_in["custom_zone_max_hr"] = item["value"]["customHeartRateZones"][1]["max"]
                     dict_in["above_calories_out"] = item["value"]["customHeartRateZones"][2]["caloriesOut"]
                     dict_in["above_minutes"] = item["value"]["customHeartRateZones"][2]["minutes"]
                     dict_in["above_min_hr"] = item["value"]["customHeartRateZones"][2]["min"]
-                    dict_in["above_range_max_hr"] = item["value"]["customHeartRateZones"][2]["max"]
+                    dict_in["above_max_hr"] = item["value"]["customHeartRateZones"][2]["max"]
                 else:
                     dict_in["below_calories_out"] = None
                     dict_in["below_minutes"] = None
@@ -3048,11 +3048,11 @@ def fitbit_lastsynch_grab():
                     dict_in["custom_zone_calories_out"] = None
                     dict_in["custom_zone_minutes"] = None
                     dict_in["custom_zone_min_hr"] = None
-                    dict_in["custom_zone_range_max_hr"] = None
+                    dict_in["custom_zone_max_hr"] = None
                     dict_in["above_calories_out"] = None
                     dict_in["above_minutes"] = None
                     dict_in["above_min_hr"] = None
-                    dict_in["above_range_max_hr"] = None
+                    dict_in["above_max_hr"] = None
                 dict_in["resting_heart_rate"] = item["value"]["restingHeartRate"]
                 dict_in["date_time"] = datetime.now()
                 hrz_list.append(dict_in)
