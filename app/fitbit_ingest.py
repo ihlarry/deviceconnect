@@ -2995,73 +2995,73 @@ def fitbit_lastsynch_grab():
             log.error("exception occured: %s", str(e))
 
         ## get heart rate zones
-#        try:
-        if delta.days == 0:
-            resp = fitbit.get(
-                "1/user/-/activities/heart/date/"
-                + "2022-12-11"
-                + "/"
-                + "2023-04-26"
-                + ".json"
-            )
-            hrz_list = []
-            log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
-            for item in resp.json()["activities-heart"]:
-                print(item)
-                dict_in = {}
-                dict_in["id"] = user
-                dict_in["date"] = item["dateTime"]
-                dict_in["out_of_range_calories_out"] = item["value"]["heartRateZones"][0]["caloriesOut"]
-                dict_in["out_of_range_minutes"] = item["value"]["heartRateZones"][0]["minutes"]
-                dict_in["out_of_range_min_hr"] = item["value"]["heartRateZones"][0]["min"]
-                dict_in["out_of_range_max_hr"] = item["value"]["heartRateZones"][0]["max"]
-                dict_in["fat_burn_calories_out"] = item["value"]["heartRateZones"][1]["caloriesOut"]
-                dict_in["fat_burn_minutes"] = item["value"]["heartRateZones"][1]["minutes"]
-                dict_in["fat_burn_min_hr"] = item["value"]["heartRateZones"][1]["min"]
-                dict_in["fat_burn_max_hr"] = item["value"]["heartRateZones"][1]["max"]
-                dict_in["cardio_calories_out"] = item["value"]["heartRateZones"][2]["caloriesOut"]
-                dict_in["cardio_minutes"] = item["value"]["heartRateZones"][2]["minutes"]
-                dict_in["cardio_min_hr"] = item["value"]["heartRateZones"][2]["min"]
-                dict_in["cardio_max_hr"] = item["value"]["heartRateZones"][2]["max"]
-                dict_in["peak_calories_out"] = item["value"]["heartRateZones"][3]["caloriesOut"]
-                dict_in["peak_minutes"] = item["value"]["heartRateZones"][3]["minutes"]
-                dict_in["peak_min_hr"] = item["value"]["heartRateZones"][3]["min"]
-                dict_in["peak_max_hr"] = item["value"]["heartRateZones"][3]["max"]
-                if len(item["value"]["customHeartRateZones"]) > 0:
-                    dict_in["below_calories_out"] = item["value"]["customHeartRateZones"][0]["caloriesOut"]
-                    dict_in["below_minutes"] = item["value"]["customHeartRateZones"][0]["minutes"]
-                    dict_in["below_min_hr"] = item["value"]["customHeartRateZones"][0]["min"]
-                    dict_in["below_max_hr"] = item["value"]["customHeartRateZones"][0]["max"]
-                    dict_in["custom_zone_calories_out"] = item["value"]["customHeartRateZones"][1]["caloriesOut"]
-                    dict_in["custom_zone_minutes"] = item["value"]["customHeartRateZones"][1]["minutes"]
-                    dict_in["custom_zone_min_hr"] = item["value"]["customHeartRateZones"][1]["min"]
-                    dict_in["custom_zone_max_hr"] = item["value"]["customHeartRateZones"][1]["max"]
-                    dict_in["above_calories_out"] = item["value"]["customHeartRateZones"][2]["caloriesOut"]
-                    dict_in["above_minutes"] = item["value"]["customHeartRateZones"][2]["minutes"]
-                    dict_in["above_min_hr"] = item["value"]["customHeartRateZones"][2]["min"]
-                    dict_in["above_max_hr"] = item["value"]["customHeartRateZones"][2]["max"]
-                else:
-                    dict_in["below_calories_out"] = None
-                    dict_in["below_minutes"] = None
-                    dict_in["below_min_hr"] = None
-                    dict_in["below_max_hr"] = None
-                    dict_in["custom_zone_calories_out"] = None
-                    dict_in["custom_zone_minutes"] = None
-                    dict_in["custom_zone_min_hr"] = None
-                    dict_in["custom_zone_max_hr"] = None
-                    dict_in["above_calories_out"] = None
-                    dict_in["above_minutes"] = None
-                    dict_in["above_min_hr"] = None
-                    dict_in["above_max_hr"] = None
-                dict_in["resting_heart_rate"] = item["value"]["restingHeartRate"]
-                dict_in["date_time"] = datetime.now()
-                hrz_list.append(dict_in)
+        try:
+            if delta.days > 0:
+                resp = fitbit.get(
+                    "1/user/-/activities/heart/date/"
+                    + startdate
+                    + "/"
+                    + enddate
+                    + ".json"
+                )
+                hrz_list = []
+                log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
+                for item in resp.json()["activities-heart"]:
+                    print(item)
+                    dict_in = {}
+                    dict_in["id"] = user
+                    dict_in["date"] = item["dateTime"]
+                    dict_in["out_of_range_calories_out"] = item["value"]["heartRateZones"][0]["caloriesOut"]
+                    dict_in["out_of_range_minutes"] = item["value"]["heartRateZones"][0]["minutes"]
+                    dict_in["out_of_range_min_hr"] = item["value"]["heartRateZones"][0]["min"]
+                    dict_in["out_of_range_max_hr"] = item["value"]["heartRateZones"][0]["max"]
+                    dict_in["fat_burn_calories_out"] = item["value"]["heartRateZones"][1]["caloriesOut"]
+                    dict_in["fat_burn_minutes"] = item["value"]["heartRateZones"][1]["minutes"]
+                    dict_in["fat_burn_min_hr"] = item["value"]["heartRateZones"][1]["min"]
+                    dict_in["fat_burn_max_hr"] = item["value"]["heartRateZones"][1]["max"]
+                    dict_in["cardio_calories_out"] = item["value"]["heartRateZones"][2]["caloriesOut"]
+                    dict_in["cardio_minutes"] = item["value"]["heartRateZones"][2]["minutes"]
+                    dict_in["cardio_min_hr"] = item["value"]["heartRateZones"][2]["min"]
+                    dict_in["cardio_max_hr"] = item["value"]["heartRateZones"][2]["max"]
+                    dict_in["peak_calories_out"] = item["value"]["heartRateZones"][3]["caloriesOut"]
+                    dict_in["peak_minutes"] = item["value"]["heartRateZones"][3]["minutes"]
+                    dict_in["peak_min_hr"] = item["value"]["heartRateZones"][3]["min"]
+                    dict_in["peak_max_hr"] = item["value"]["heartRateZones"][3]["max"]
+                    if len(item["value"]["customHeartRateZones"]) > 0:
+                        dict_in["below_calories_out"] = item["value"]["customHeartRateZones"][0]["caloriesOut"]
+                        dict_in["below_minutes"] = item["value"]["customHeartRateZones"][0]["minutes"]
+                        dict_in["below_min_hr"] = item["value"]["customHeartRateZones"][0]["min"]
+                        dict_in["below_max_hr"] = item["value"]["customHeartRateZones"][0]["max"]
+                        dict_in["custom_zone_calories_out"] = item["value"]["customHeartRateZones"][1]["caloriesOut"]
+                        dict_in["custom_zone_minutes"] = item["value"]["customHeartRateZones"][1]["minutes"]
+                        dict_in["custom_zone_min_hr"] = item["value"]["customHeartRateZones"][1]["min"]
+                        dict_in["custom_zone_max_hr"] = item["value"]["customHeartRateZones"][1]["max"]
+                        dict_in["above_calories_out"] = item["value"]["customHeartRateZones"][2]["caloriesOut"]
+                        dict_in["above_minutes"] = item["value"]["customHeartRateZones"][2]["minutes"]
+                        dict_in["above_min_hr"] = item["value"]["customHeartRateZones"][2]["min"]
+                        dict_in["above_max_hr"] = item["value"]["customHeartRateZones"][2]["max"]
+                    else:
+                        dict_in["below_calories_out"] = None
+                        dict_in["below_minutes"] = None
+                        dict_in["below_min_hr"] = None
+                        dict_in["below_max_hr"] = None
+                        dict_in["custom_zone_calories_out"] = None
+                        dict_in["custom_zone_minutes"] = None
+                        dict_in["custom_zone_min_hr"] = None
+                        dict_in["custom_zone_max_hr"] = None
+                        dict_in["above_calories_out"] = None
+                        dict_in["above_minutes"] = None
+                        dict_in["above_min_hr"] = None
+                        dict_in["above_max_hr"] = None
+                    dict_in["resting_heart_rate"] = item["value"]["restingHeartRate"]
+                    dict_in["date_time"] = datetime.now()
+                    hrz_list.append(dict_in)
 
-            hr_df = pd.DataFrame(hrz_list)
-            hr_zones_list.append(hr_df)
-            print(hr_zones_list)
-#        except (Exception) as e:
-#            log.error("exception occured: %s", str(e))
+                hr_df = pd.DataFrame(hrz_list)
+                hr_zones_list.append(hr_df)
+                print(hr_zones_list)
+        except (Exception) as e:
+            log.error("exception occured: %s", str(e))
 
         ## get vo2max
         try:
