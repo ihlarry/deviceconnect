@@ -3026,7 +3026,7 @@ def fitbit_lastsynch_grab():
                 dict_in["peak_minutes"] = item["value"]["heartRateZones"][3]["minutes"]
                 dict_in["peak_min_hr"] = item["value"]["heartRateZones"][3]["min"]
                 dict_in["peak_range_max_hr"] = item["value"]["heartRateZones"][3]["max"]
-                if item["value"]["customHeartRateZones"] in item:
+                if item["value"]["customHeartRateZones"][0] in item:
                     dict_in["below_calories_out"] = item["value"]["customHeartRateZones"][0]["caloriesOut"]
                     dict_in["below_minutes"] = item["value"]["customHeartRateZones"][0]["minutes"]
                     dict_in["below_min_hr"] = item["value"]["customHeartRateZones"][0]["min"]
