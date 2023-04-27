@@ -3001,7 +3001,7 @@ def fitbit_lastsynch_grab():
                 "1/user/-/activities/heart/date/"
                 + "2022-12-11"
                 + "/"
-                + "2023-12-11"
+                + "2023-04-27"
                 + ".json"
             )
             hrz_list = []
