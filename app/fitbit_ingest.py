@@ -2906,12 +2906,11 @@ def fitbit_lastsynch_grab():
     azm_list = []
     hr_zones_list = []
 
-
-
     for user in user_list:
 
         a = datetime.strptime('1/1/2023',"%m/%d/%Y")
         b = datetime.strptime('1/1/2023', "%m/%d/%Y")
+
 
         delta = b - a
 
@@ -2926,7 +2925,7 @@ def fitbit_lastsynch_grab():
             ############## CONNECT TO DEVICE ENDPOINT #################
             fpoint = fitbit_data(user)
             last_sync_stored = fpoint.get_lastsynch()
-            if last_sync_stored != None:
+            if last_sync_stored is not None:
                 lastsyncstored = last_sync_stored.strftime('%Y-%m-%d')
             else:
                 lastsyncstored = ""
@@ -2954,10 +2953,10 @@ def fitbit_lastsynch_grab():
                 )
                 print("last_sync ", device_df["last_sync_time"])
                 fitls = device_df.iloc[0]["last_sync_time"].split('T')
-                fitlastsync = datetime.strptime(fitls[0],'%Y-%m-%d')
+                fitlastsync = datetime.strptime(fitls[0], '%Y-%m-%d')
                 if lastsyncstored:
                     startdate = lastsyncstored
-                    delta = datetime.strptime(fitls[0],'%Y-%m-%d') - datetime.strptime(lastsyncstored,'%Y-%m-%d')
+                    delta = datetime.strptime(fitls[0], '%Y-%m-%d') - datetime.strptime(lastsyncstored, '%Y-%m-%d')
                     enddate = (fitlastsync.date() - timedelta(days=1)).strftime('%Y-%m-%d')
                     print(fitlastsync.strftime('%Y-%m-%d %H:%M:%S.%f'), startdate, str(delta.days))
                 else:
@@ -2997,7 +2996,7 @@ def fitbit_lastsynch_grab():
 
         ## get heart rate zones
 #        try:
-        if delta.days == 0:
+        if delta.days > 0:
             resp = fitbit.get(
                 "1/user/-/activities/heart/date/"
                 + "2022-12-11"
@@ -3005,258 +3004,46 @@ def fitbit_lastsynch_grab():
                 + "2023-12-11"
                 + ".json"
             )
-
+            hrz_list = []
             log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
-            date_in = resp.json()["activities-heart"][0]["dateTime"]
-            hr_zones = resp.json()["activities-heart"][0]["value"]
-            zone_list = ["Out of Range", "Fat Burn", "Cardio", "Peak"]
-            hr_zones_columns = [
-                "out_of_range_calories_out",
-                "out_of_range_minutes",
-                "out_of_range_min_hr",
-                "out_of_range_max_hr",
-                "fat_burn_calories_out",
-                "fat_burn_minutes",
-                "fat_burn_min_hr",
-                "fat_burn_max_hr",
-                "cardio_calories_out",
-                "cardio_minutes",
-                "cardio_min_hr",
-                "cardio_max_hr",
-                "peak_calories_out",
-                "peak_minutes",
-                "peak_min_hr",
-                "peak_max_hr",
-                "below_calories_out",
-                "below_minutes",
-                "below_min_hr",
-                "below_max_hr",
-                "custom_zone_calories_out",
-                "custom_zone_minutes",
-                "custom_zone_min_hr",
-                "custom_zone_max_hr",
-                "above_calories_out",
-                "above__minutes",
-                "above__min_hr",
-                "above_max_hr"
-            ]
-            hr_zones_df = pd.json_normalize(hr_zones)
-            if 'customHeartRateZone' not in hr_zones:
-                user_activity_zone = pd.DataFrame(
-                    {
-                        hr_zones["heartRateZones"][0]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_calories_out": hr_zones["heartRateZones"][0][
-                            "caloriesOut"
-                        ],
-                        hr_zones["heartRateZones"][0]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_minutes": hr_zones["heartRateZones"][0]["minutes"],
-                        hr_zones["heartRateZones"][0]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_min_hr": hr_zones["heartRateZones"][0]["min"],
-                        hr_zones["heartRateZones"][0]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_max_hr": hr_zones["heartRateZones"][0]["max"],
-                        hr_zones["heartRateZones"][1]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_calories_out": hr_zones["heartRateZones"][1][
-                            "caloriesOut"
-                        ],
-                        hr_zones["heartRateZones"][1]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_minutes": hr_zones["heartRateZones"][1]["minutes"],
-                        hr_zones["heartRateZones"][1]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_min_hr": hr_zones["heartRateZones"][1]["min"],
-                        hr_zones["heartRateZones"][1]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_max_hr": hr_zones["heartRateZones"][1]["max"],
-                        hr_zones["heartRateZones"][2]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_calories_out": hr_zones["heartRateZones"][2][
-                            "caloriesOut"
-                        ],
-                        hr_zones["heartRateZones"][2]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_minutes": hr_zones["heartRateZones"][2]["minutes"],
-                        hr_zones["heartRateZones"][2]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_min_hr": hr_zones["heartRateZones"][2]["min"],
-                        hr_zones["heartRateZones"][2]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_max_hr": hr_zones["heartRateZones"][2]["max"],
-                        hr_zones["heartRateZones"][3]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_calories_out": hr_zones["heartRateZones"][3][
-                            "caloriesOut"
-                        ],
-                        hr_zones["heartRateZones"][3]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_minutes": hr_zones["heartRateZones"][3]["minutes"],
-                        hr_zones["heartRateZones"][3]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_min_hr": hr_zones["heartRateZones"][3]["min"],
-                        hr_zones["heartRateZones"][3]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_max_hr": hr_zones["heartRateZones"][3]["max"],
-                    },
-                    index=[0],
-                )
-            else:
-                user_activity_zone = pd.DataFrame(
-                    {
-                        hr_zones["heartRateZones"][0]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_calories_out": hr_zones["heartRateZones"][0][
-                            "caloriesOut"
-                        ],
-                        hr_zones["heartRateZones"][0]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_minutes": hr_zones["heartRateZones"][0]["minutes"],
-                        hr_zones["heartRateZones"][0]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_min_hr": hr_zones["heartRateZones"][0]["min"],
-                        hr_zones["heartRateZones"][0]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_max_hr": hr_zones["heartRateZones"][0]["max"],
-                        hr_zones["heartRateZones"][1]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_calories_out": hr_zones["heartRateZones"][1][
-                            "caloriesOut"
-                        ],
-                        hr_zones["heartRateZones"][1]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_minutes": hr_zones["heartRateZones"][1]["minutes"],
-                        hr_zones["heartRateZones"][1]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_min_hr": hr_zones["heartRateZones"][1]["min"],
-                        hr_zones["heartRateZones"][1]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_max_hr": hr_zones["heartRateZones"][1]["max"],
-                        hr_zones["heartRateZones"][2]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_calories_out": hr_zones["heartRateZones"][2][
-                            "caloriesOut"
-                        ],
-                        hr_zones["heartRateZones"][2]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_minutes": hr_zones["heartRateZones"][2]["minutes"],
-                        hr_zones["heartRateZones"][2]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_min_hr": hr_zones["heartRateZones"][2]["min"],
-                        hr_zones["heartRateZones"][2]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_max_hr": hr_zones["heartRateZones"][2]["max"],
-                        hr_zones["heartRateZones"][3]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_calories_out": hr_zones["heartRateZones"][3][
-                            "caloriesOut"
-                        ],
-                        hr_zones["heartRateZones"][3]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_minutes": hr_zones["heartRateZones"][3]["minutes"],
-                        hr_zones["heartRateZones"][3]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_min_hr": hr_zones["heartRateZones"][3]["min"],
-                        hr_zones["heartRateZones"][3]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_max_hr": hr_zones["heartRateZones"][3]["max"],
-                        hr_zones["customHeartRateZones"][0]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_calories_out": hr_zones["customHeartRateZones"][0][
-                            "caloriesOut"
-                        ],
-                        hr_zones["customHeartRateZones"][0]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_minutes": hr_zones["customHeartRateZones"][0]["minutes"],
-                        hr_zones["customHeartRateZones"][0]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_min_hr": hr_zones["customHeartRateZones"][0]["min"],
-                        hr_zones["customHeartRateZones"][0]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_max_hr": hr_zones["customHeartRateZones"][0]["max"],
-                        hr_zones["customHeartRateZones"][1]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_calories_out": hr_zones["customHeartRateZones"][1][
-                            "caloriesOut"
-                        ],
-                        hr_zones["customHeartRateZones"][1]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_minutes": hr_zones["customHeartRateZones"][1]["minutes"],
-                        hr_zones["customHeartRateZones"][1]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_min_hr": hr_zones["customHeartRateZones"][1]["min"],
-                        hr_zones["customHeartRateZones"][1]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_max_hr": hr_zones["customHeartRateZones"][1]["max"],
-                        hr_zones["customHeartRateZones"][2]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_calories_out": hr_zones["customHeartRateZones"][2][
-                            "caloriesOut"
-                        ],
-                        hr_zones["customHeartRateZones"][2]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_minutes": hr_zones["customHeartRateZones"][2]["minutes"],
-                        hr_zones["customHeartRateZones"][2]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_min_hr": hr_zones["customHeartRateZones"][2]["min"],
-                        hr_zones["customHeartRateZones"][2]["name"]
-                        .replace(" ", "_")
-                        .lower()
-                        + "_max_hr": hr_zones["customHeartRateZones"][2]["max"],
-                    },
-                    index=[0],
-                )
+            for item in resp.json()["activities-heart"]:
+                dict_in = {}
+                dict_in["id"] = user
+                dict_in["date"] = item["dateTime"]
+                dict_in["out_of_range_calories_out"] = item["value"]["heartRateZones"][0]["out_of_range_caloriesOut"]
+                dict_in["out_of_range_minutes"] = item["value"]["heartRateZones"][0]["out_of_range_minutes"]
+                dict_in["out_of_range_min_hr"] = item["value"]["heartRateZones"][0]["out_of_range_min_hr"]
+                dict_in["out_of_range_max_hr"] = item["value"]["heartRateZones"][0]["out_of_range_max_hr"]
+                dict_in["fat_burn_calories_out"] = item["value"]["heartRateZones"][0]["fat_burn_caloriesOut"]
+                dict_in["fat_burn_minutes"] = item["value"]["heartRateZones"][0]["fat_burn_minutes"]
+                dict_in["fat_burn_min_hr"] = item["value"]["heartRateZones"][0]["fat_burn_min_hr"]
+                dict_in["fat_burn_range_max_hr"] = item["value"]["heartRateZones"][0]["fat_burn_max_hr"]
+                dict_in["cardio_calories_out"] = item["value"]["heartRateZones"][0]["cardio_caloriesOut"]
+                dict_in["cardio_minutes"] = item["value"]["heartRateZones"][0]["cardio_minutes"]
+                dict_in["cardio_min_hr"] = item["value"]["heartRateZones"][0]["cardio_min_hr"]
+                dict_in["cardio_range_max_hr"] = item["value"]["heartRateZones"][0]["cardio_max_hr"]
+                dict_in["peak_calories_out"] = item["value"]["heartRateZones"][0]["peak_caloriesOut"]
+                dict_in["peak_minutes"] = item["value"]["heartRateZones"][0]["peak_minutes"]
+                dict_in["peak_min_hr"] = item["value"]["heartRateZones"][0]["peak_min_hr"]
+                dict_in["peak_range_max_hr"] = item["value"]["heartRateZones"][0]["peak_max_hr"]
+                dict_in["below_calories_out"] = item["value"]["heartRateZones"][0]["below_caloriesOut"]
+                dict_in["below_minutes"] = item["value"]["heartRateZones"][0]["below_minutes"]
+                dict_in["below_min_hr"] = item["value"]["heartRateZones"][0]["below_min_hr"]
+                dict_in["below_max_hr"] = item["value"]["heartRateZones"][0]["below_max_hr"]
+                dict_in["custom_zone_calories_out"] = item["value"]["heartRateZones"][0]["custom_zone_caloriesOut"]
+                dict_in["custom_zone_minutes"] = item["value"]["heartRateZones"][0]["custom_zone_minutes"]
+                dict_in["custom_zone_min_hr"] = item["value"]["heartRateZones"][0]["custom_zone_min_hr"]
+                dict_in["custom_zone_range_max_hr"] = item["value"]["heartRateZones"][0]["custom_zone_max_hr"]
+                dict_in["above_calories_out"] = item["value"]["heartRateZones"][0]["above_caloriesOut"]
+                dict_in["above_minutes"] = item["value"]["heartRateZones"][0]["above_minutes"]
+                dict_in["above_min_hr"] = item["value"]["heartRateZones"][0]["above_min_hr"]
+                dict_in["above_range_max_hr"] = item["value"]["heartRateZones"][0]["above_max_hr"]
+                dict_in["resting_heart_rate"] = item["value"]["restingHeartRate"]
+                dict_in["date_time"] = datetime.now()
+                hrz_list.append(dict_in)
 
-            user_activity_zone.insert(0, "id", user)
-            user_activity_zone["resting_heart_rate"] = hr_zones["restingHeartRate"]
-            user_activity_zone["date"] = date_in
-            user_activity_zone["date_time"] = datetime.now()
-            hr_zones_list.append(user_activity_zone)
+            hr_df = pd.DataFrame(hrz_list)
+            hr_zones_list.append(hr_df)
 #        except (Exception) as e:
 #            log.error("exception occured: %s", str(e))
 
@@ -3508,6 +3295,12 @@ def fitbit_lastsynch_grab():
                     "type": "INTEGER",
                     "description": "Maximum range for the heart rate zone.",
                 },
+                {
+                    "name": "resting_heart_rate",
+                    "type": "INTEGER",
+                    "description": "Resting heart rate.",
+                },
+                {"name": "date_time", "type": "TIMESTAMP"}
             ],
         )
 #        except (Exception) as e:
