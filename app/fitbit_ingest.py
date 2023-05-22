@@ -3088,13 +3088,13 @@ def fitbit_lastsynch_grab():
 
         ## get hrv
         try:
-            if delta.days == 0:
+            if delta.days > 0:
 
                 resp = fitbit.get(
                     "/1/user/-/hrv/date/"
-                    + "2023-05-01"
+                    + startdate
                     + "/"
-                    + "2023-05-21"
+                    + enddate
                     + ".json"
                 )
 
@@ -3107,7 +3107,6 @@ def fitbit_lastsynch_grab():
                 hrv_df = _normalize_response2(
                     hrv_df, hrv_columns, user
                 )
-                print(hrv_df)
                 hrv_list.append(hrv_df)
         except (Exception) as e:
             log.error("exception occured: %s", str(e))
