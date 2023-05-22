@@ -3092,7 +3092,7 @@ def fitbit_lastsynch_grab():
 
                 resp = fitbit.get(
                     "/1/user/-/hrv/date/"
-                    + "2023-02-01"
+                    + "2023-05-01"
                     + "/"
                     + "2023-05-21"
                     + ".json"
