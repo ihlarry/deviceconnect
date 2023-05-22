@@ -3404,12 +3404,12 @@ def fitbit_lastsynch_grab():
                         "description": "The date values were extracted",
                     },
                     {
-                        "name": "value_hrv_daily_rmssd",
+                        "name": "value_daily_rmssd",
                         "type": "FLOAT",
                         "description": "daily hrv average",
                     },
                     {
-                        "name": "value_hrv_deep_rmssd",
+                        "name": "value_deep_rmssd",
                         "type": "FLOAT",
                         "description": "hrv during deep sleep",
                     }
