@@ -3107,6 +3107,7 @@ def fitbit_lastsynch_grab():
                 hrv_df = _normalize_response2(
                     hrv_df, hrv_columns, user
                 )
+                print(hrv_df)
                 hrv_list.append(hrv_df)
         except (Exception) as e:
             log.error("exception occured: %s", str(e))
