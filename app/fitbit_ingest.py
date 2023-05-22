@@ -2903,12 +2903,13 @@ def fitbit_lastsynch_grab():
     steps_list = []
     device_list = []
     cs_list = []
+    hrv_list = []
     azm_list = []
     hr_zones_list = []
 
     for user in user_list:
 
-        a = datetime.strptime('1/1/2023',"%m/%d/%Y")
+        a = datetime.strptime('1/1/2023', "%m/%d/%Y")
         b = datetime.strptime('1/1/2023', "%m/%d/%Y")
 
 
@@ -3007,7 +3008,6 @@ def fitbit_lastsynch_grab():
                 hrz_list = []
                 log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
                 for item in resp.json()["activities-heart"]:
-                    print(item)
                     dict_in = {}
                     dict_in["id"] = user
                     dict_in["date"] = item["dateTime"]
@@ -3059,7 +3059,6 @@ def fitbit_lastsynch_grab():
 
                 hr_df = pd.DataFrame(hrz_list)
                 hr_zones_list.append(hr_df)
-                print(hr_zones_list)
         except (Exception) as e:
             log.error("exception occured: %s", str(e))
 
@@ -3084,6 +3083,31 @@ def fitbit_lastsynch_grab():
                     cs_df, cs_columns, user
                 )
                 cs_list.append(cs_df)
+        except (Exception) as e:
+            log.error("exception occured: %s", str(e))
+
+        ## get hrv
+        try:
+            if delta.days == 0:
+
+                resp = fitbit.get(
+                    "/1/user/-/hrv/date/"
+                    + "2023-02-01"
+                    + "/"
+                    + "2023-05-21"
+                    + ".json"
+                )
+
+                log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
+                hrvread = resp.json()["hrv"]
+                hrv_df = pd.json_normalize(hrvread)
+                hrv_columns = ["dateTime",
+                              "value.dailyRmssd",
+                              "value.deepRmssd"]
+                hrv_df = _normalize_response2(
+                    hrv_df, hrv_columns, user
+                )
+                hrv_list.append(hrv_df)
         except (Exception) as e:
             log.error("exception occured: %s", str(e))
 
@@ -3152,175 +3176,175 @@ def fitbit_lastsynch_grab():
 
     if len(hr_zones_list) > 0:
 
- #       try:
+        try:
 
-        bulk_hr_zones_df = pd.concat(hr_zones_list, axis=0)
-        pandas_gbq.to_gbq(
-            dataframe=bulk_hr_zones_df,
-            destination_table=_tablename("sync_heart_rate_zones"),
-            project_id=project_id,
-            if_exists="append",
-            table_schema=[
-                {
-                    "name": "id",
-                    "type": "STRING",
-                    "description": "Primary Key",
-                },
-                {
-                    "name": "date",
-                    "type": "DATE",
-                    "description": "The date values were extracted",
-                },
-                {
-                    "name": "out_of_range_calories_out",
-                    "type": "FLOAT",
-                    "description": "Number calories burned with the specified heart rate zone.",
-                },
-                {
-                    "name": "out_of_range_minutes",
-                    "type": "INTEGER",
-                    "description": "Number calories burned with the specified heart rate zone.",
-                },
-                {
-                    "name": "out_of_range_min_hr",
-                    "type": "INTEGER",
-                    "description": "Minimum range for the heart rate zone.",
-                },
-                {
-                    "name": "out_of_range_max_hr",
-                    "type": "INTEGER",
-                    "description": "Maximum range for the heart rate zone.",
-                },
-                {
-                    "name": "fat_burn_calories_out",
-                    "type": "FLOAT",
-                    "description": "Number calories burned with the specified heart rate zone.",
-                },
-                {
-                    "name": "fat_burn_minutes",
-                    "type": "INTEGER",
-                    "description": "Number calories burned with the specified heart rate zone.",
-                },
-                {
-                    "name": "fat_burn_min_hr",
-                    "type": "INTEGER",
-                    "description": "Minimum range for the heart rate zone.",
-                },
-                {
-                    "name": "fat_burn_max_hr",
-                    "type": "INTEGER",
-                    "description": "Maximum range for the heart rate zone.",
-                },
-                {
-                    "name": "cardio_calories_out",
-                    "type": "FLOAT",
-                    "description": "Number calories burned with the specified heart rate zone.",
-                },
-                {
-                    "name": "cardio_minutes",
-                    "type": "INTEGER",
-                    "description": "Number calories burned with the specified heart rate zone.",
-                },
-                {
-                    "name": "cardio_min_hr",
-                    "type": "INTEGER",
-                    "description": "Minimum range for the heart rate zone.",
-                },
-                {
-                    "name": "cardio_max_hr",
-                    "type": "INTEGER",
-                    "description": "Maximum range for the heart rate zone.",
-                },
-                {
-                    "name": "peak_calories_out",
-                    "type": "FLOAT",
-                    "description": "Number calories burned with the specified heart rate zone.",
-                },
-                {
-                    "name": "peak_minutes",
-                    "type": "INTEGER",
-                    "description": "Number calories burned with the specified heart rate zone.",
-                },
-                {
-                    "name": "peak_min_hr",
-                    "type": "INTEGER",
-                    "description": "Minimum range for the heart rate zone.",
-                },
-                {
-                    "name": "peak_max_hr",
-                    "type": "INTEGER",
-                    "description": "Maximum range for the heart rate zone.",
-                },
-                {
-                    "name": "below_calories_out",
-                    "type": "FLOAT",
-                    "description": "Number calories burned with the specified heart rate zone.",
-                },
-                {
-                    "name": "below_minutes",
-                    "type": "INTEGER",
-                    "description": "Number calories burned with the specified heart rate zone.",
-                },
-                {
-                    "name": "below_min_hr",
-                    "type": "INTEGER",
-                    "description": "Minimum range for the heart rate zone.",
-                },
-                {
-                    "name": "below_max_hr",
-                    "type": "INTEGER",
-                    "description": "Maximum range for the heart rate zone.",
-                },
-                {
-                    "name": "custom_zone_calories_out",
-                    "type": "FLOAT",
-                    "description": "Number calories burned with the specified heart rate zone.",
-                },
-                {
-                    "name": "custom_zone_minutes",
-                    "type": "INTEGER",
-                    "description": "Number calories burned with the specified heart rate zone.",
-                },
-                {
-                    "name": "custom_zone_min_hr",
-                    "type": "INTEGER",
-                    "description": "Minimum range for the heart rate zone.",
-                },
-                {
-                    "name": "custom_zone_max_hr",
-                    "type": "INTEGER",
-                    "description": "Maximum range for the heart rate zone.",
-                },
-                {
-                    "name": "above_calories_out",
-                    "type": "FLOAT",
-                    "description": "Number calories burned with the specified heart rate zone.",
-                },
-                {
-                    "name": "above_minutes",
-                    "type": "INTEGER",
-                    "description": "Number calories burned with the specified heart rate zone.",
-                },
-                {
-                    "name": "above_min_hr",
-                    "type": "INTEGER",
-                    "description": "Minimum range for the heart rate zone.",
-                },
-                {
-                    "name": "above_max_hr",
-                    "type": "INTEGER",
-                    "description": "Maximum range for the heart rate zone.",
-                },
-                {
-                    "name": "resting_heart_rate",
-                    "type": "INTEGER",
-                    "description": "Resting heart rate.",
-                },
-                {"name": "date_time", "type": "TIMESTAMP"}
-            ],
-        )
-#        except (Exception) as e:
-#           log.error("exception occured: %s", str(e))
+            bulk_hr_zones_df = pd.concat(hr_zones_list, axis=0)
+            pandas_gbq.to_gbq(
+                dataframe=bulk_hr_zones_df,
+                destination_table=_tablename("sync_heart_rate_zones"),
+                project_id=project_id,
+                if_exists="append",
+                table_schema=[
+                    {
+                        "name": "id",
+                        "type": "STRING",
+                        "description": "Primary Key",
+                    },
+                    {
+                        "name": "date",
+                        "type": "DATE",
+                        "description": "The date values were extracted",
+                    },
+                    {
+                        "name": "out_of_range_calories_out",
+                        "type": "FLOAT",
+                        "description": "Number calories burned with the specified heart rate zone.",
+                    },
+                    {
+                        "name": "out_of_range_minutes",
+                        "type": "INTEGER",
+                        "description": "Number calories burned with the specified heart rate zone.",
+                    },
+                    {
+                        "name": "out_of_range_min_hr",
+                        "type": "INTEGER",
+                        "description": "Minimum range for the heart rate zone.",
+                    },
+                    {
+                        "name": "out_of_range_max_hr",
+                        "type": "INTEGER",
+                        "description": "Maximum range for the heart rate zone.",
+                    },
+                    {
+                        "name": "fat_burn_calories_out",
+                        "type": "FLOAT",
+                        "description": "Number calories burned with the specified heart rate zone.",
+                    },
+                    {
+                        "name": "fat_burn_minutes",
+                        "type": "INTEGER",
+                        "description": "Number calories burned with the specified heart rate zone.",
+                    },
+                    {
+                        "name": "fat_burn_min_hr",
+                        "type": "INTEGER",
+                        "description": "Minimum range for the heart rate zone.",
+                    },
+                    {
+                        "name": "fat_burn_max_hr",
+                        "type": "INTEGER",
+                        "description": "Maximum range for the heart rate zone.",
+                    },
+                    {
+                        "name": "cardio_calories_out",
+                        "type": "FLOAT",
+                        "description": "Number calories burned with the specified heart rate zone.",
+                    },
+                    {
+                        "name": "cardio_minutes",
+                        "type": "INTEGER",
+                        "description": "Number calories burned with the specified heart rate zone.",
+                    },
+                    {
+                        "name": "cardio_min_hr",
+                        "type": "INTEGER",
+                        "description": "Minimum range for the heart rate zone.",
+                    },
+                    {
+                        "name": "cardio_max_hr",
+                        "type": "INTEGER",
+                        "description": "Maximum range for the heart rate zone.",
+                    },
+                    {
+                        "name": "peak_calories_out",
+                        "type": "FLOAT",
+                        "description": "Number calories burned with the specified heart rate zone.",
+                    },
+                    {
+                        "name": "peak_minutes",
+                        "type": "INTEGER",
+                        "description": "Number calories burned with the specified heart rate zone.",
+                    },
+                    {
+                        "name": "peak_min_hr",
+                        "type": "INTEGER",
+                        "description": "Minimum range for the heart rate zone.",
+                    },
+                    {
+                        "name": "peak_max_hr",
+                        "type": "INTEGER",
+                        "description": "Maximum range for the heart rate zone.",
+                    },
+                    {
+                        "name": "below_calories_out",
+                        "type": "FLOAT",
+                        "description": "Number calories burned with the specified heart rate zone.",
+                    },
+                    {
+                        "name": "below_minutes",
+                        "type": "INTEGER",
+                        "description": "Number calories burned with the specified heart rate zone.",
+                    },
+                    {
+                        "name": "below_min_hr",
+                        "type": "INTEGER",
+                        "description": "Minimum range for the heart rate zone.",
+                    },
+                    {
+                        "name": "below_max_hr",
+                        "type": "INTEGER",
+                        "description": "Maximum range for the heart rate zone.",
+                    },
+                    {
+                        "name": "custom_zone_calories_out",
+                        "type": "FLOAT",
+                        "description": "Number calories burned with the specified heart rate zone.",
+                    },
+                    {
+                        "name": "custom_zone_minutes",
+                        "type": "INTEGER",
+                        "description": "Number calories burned with the specified heart rate zone.",
+                    },
+                    {
+                        "name": "custom_zone_min_hr",
+                        "type": "INTEGER",
+                        "description": "Minimum range for the heart rate zone.",
+                    },
+                    {
+                        "name": "custom_zone_max_hr",
+                        "type": "INTEGER",
+                        "description": "Maximum range for the heart rate zone.",
+                    },
+                    {
+                        "name": "above_calories_out",
+                        "type": "FLOAT",
+                        "description": "Number calories burned with the specified heart rate zone.",
+                    },
+                    {
+                        "name": "above_minutes",
+                        "type": "INTEGER",
+                        "description": "Number calories burned with the specified heart rate zone.",
+                    },
+                    {
+                        "name": "above_min_hr",
+                        "type": "INTEGER",
+                        "description": "Minimum range for the heart rate zone.",
+                    },
+                    {
+                        "name": "above_max_hr",
+                        "type": "INTEGER",
+                        "description": "Maximum range for the heart rate zone.",
+                    },
+                    {
+                        "name": "resting_heart_rate",
+                        "type": "INTEGER",
+                        "description": "Resting heart rate.",
+                    },
+                    {"name": "date_time", "type": "TIMESTAMP"}
+                ],
+            )
+        except (Exception) as e:
+            log.error("exception occured: %s", str(e))
 
     if len(cs_list) > 0:
 
@@ -3349,6 +3373,44 @@ def fitbit_lastsynch_grab():
                         "name": "value_vo_2_max",
                         "type": "STRING",
                         "description": "Number of steps at this time",
+                    }
+                ],
+            )
+        except (Exception) as e:
+            log.error("exception occured: %s", str(e))
+
+    if len(hrv_list) > 0:
+
+        try:
+
+            bulk_cs_df = pd.concat(hrv_list, axis=0)
+            pandas_gbq.to_gbq(
+                dataframe=bulk_cs_df,
+                destination_table=_tablename("hrv"),
+                project_id=project_id,
+                if_exists="append",
+                table_schema=[
+                    {
+                        "name": "id",
+                        "type": "STRING",
+                        "mode": "REQUIRED",
+                        "description": "Primary Key",
+                    },
+                    {
+                        "name": "date_time",
+                        "type": "DATE",
+                        "mode": "REQUIRED",
+                        "description": "The date values were extracted",
+                    },
+                    {
+                        "name": "value_hrv_daily_rmssd",
+                        "type": "FLOAT",
+                        "description": "daily hrv average",
+                    },
+                    {
+                        "name": "value_hrv_deep_rmssd",
+                        "type": "FLOAT",
+                        "description": "hrv during deep sleep",
                     }
                 ],
             )
