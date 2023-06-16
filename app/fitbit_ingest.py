@@ -2906,6 +2906,7 @@ def fitbit_lastsynch_grab():
     hrv_list = []
     azm_list = []
     hr_zones_list = []
+    sleep_list = []
 
     for user in user_list:
 
@@ -3108,6 +3109,39 @@ def fitbit_lastsynch_grab():
                     hrv_df, hrv_columns, user
                 )
                 hrv_list.append(hrv_df)
+        except (Exception) as e:
+            log.error("exception occured: %s", str(e))
+
+        ## get sleep data
+        try:
+            if delta.days == 0:
+                startdate = "2022-12-11"
+                delta = datetime.strptime('2023-06-15', '%Y-%m-%d') - datetime.strptime(startdate, '%Y-%m-%d')
+                enddate = "2023-06-15"
+                for single_date in (startdate - datetime.timedelta(1) + datetime.timedelta(n) for n in
+                                    range(delta.days)):
+                    resp = fitbit.get(
+                        "GET https://api.fitbit.com/1.2/user/-/sleep/date/"
+                        + single_date
+                        + ".json"
+                    )
+                    slp_list = []
+                    log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
+
+                    if resp.json()["summary"].get("stages"):
+                        dict_in = {}
+                        dict_in["id"] = user
+                        dict_in["date"] = resp.json()["sleep"][0]["dateOfSleep"]
+                        dict_in["efficiency"] = resp.json()["sleep"][0]["efficiency"]
+                        dict_in["deep"] = resp.json()["summary"]["stages"]["deep"]
+                        dict_in["light"] = resp.json()["summary"]["stages"]["light"]
+                        dict_in["rem"] = resp.json()["summary"]["stages"]["rem"]
+                        dict_in["wake"] = resp.json()["summary"]["stages"]["wake"]
+                        dict_in["date_time"] = datetime.now()
+                        slp_list.append(dict_in)
+
+                    sleep_df = pd.DataFrame(slp_list)
+                    sleep_list.append(sleep_df)
         except (Exception) as e:
             log.error("exception occured: %s", str(e))
 
@@ -3383,9 +3417,9 @@ def fitbit_lastsynch_grab():
 
         try:
 
-            bulk_cs_df = pd.concat(hrv_list, axis=0)
+            bulk_hrv_df = pd.concat(hrv_list, axis=0)
             pandas_gbq.to_gbq(
-                dataframe=bulk_cs_df,
+                dataframe=bulk_hrv_df,
                 destination_table=_tablename("hrv"),
                 project_id=project_id,
                 if_exists="append",
@@ -3411,6 +3445,59 @@ def fitbit_lastsynch_grab():
                         "name": "value_deep_rmssd",
                         "type": "FLOAT",
                         "description": "hrv during deep sleep",
+                    }
+                ],
+            )
+        except (Exception) as e:
+            log.error("exception occured: %s", str(e))
+
+    if len(sleep_list) > 0:
+
+        try:
+
+            bulk_sleep_df = pd.concat(sleep_list, axis=0)
+            pandas_gbq.to_gbq(
+                dataframe=bulk_sleep_df,
+                destination_table=_tablename("sync_sleep"),
+                project_id=project_id,
+                if_exists="append",
+                table_schema=[
+                    {
+                        "name": "id",
+                        "type": "STRING",
+                        "mode": "REQUIRED",
+                        "description": "Primary Key",
+                    },
+                    {
+                        "name": "date_time",
+                        "type": "DATE",
+                        "mode": "REQUIRED",
+                        "description": "The date values were extracted",
+                    },
+                    {
+                        "name": "efficiency",
+                        "type": "INTEGER",
+                        "description": "sleep efficency",
+                    },
+                    {
+                        "name": "deep",
+                        "type": "INTEGER",
+                        "description": "deep sleep",
+                    },
+                    {
+                        "name": "light",
+                        "type": "INTEGER",
+                        "description": "light sleep",
+                    },
+                    {
+                        "name": "rem",
+                        "type": "INTEGER",
+                        "description": "rem sleep",
+                    },
+                    {
+                        "name": "wake",
+                        "type": "INTEGER",
+                        "description": "wake",
                     }
                 ],
             )
