@@ -3150,7 +3150,8 @@ def fitbit_lastsynch_grab():
                 )
                 slp_list = []
                 log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
-
+                print("single_date ", single_date.strftime('%Y-%m-%d'))
+                print(resp.json)
                 if resp.json()["summary"].get("stages"):
                     dict_in = {}
                     dict_in["id"] = user
