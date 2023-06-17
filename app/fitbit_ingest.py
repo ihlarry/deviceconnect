@@ -3144,7 +3144,7 @@ def fitbit_lastsynch_grab():
             for single_date in (startdate - timedelta(1) + timedelta(n) for n in
                                 range(delta.days)):
                 resp = fitbit.get(
-                    "GET https://api.fitbit.com/1.2/user/-/sleep/date/"
+                    "/1.2/user/-/sleep/date/"
                     + single_date.strftime('%Y-%m-%d')
                     + ".json"
                 )
