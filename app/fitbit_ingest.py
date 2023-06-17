@@ -3139,14 +3139,13 @@ def fitbit_lastsynch_grab():
             ## get sleep data
 #       try:
         if delta.days == 0:
-            startdate = "2022-12-11"
+            startdate = datetime.strptime('2022-12-11', '%Y-%m-%d')
             delta = datetime.strptime('2023-06-15', '%Y-%m-%d') - datetime.strptime(startdate, '%Y-%m-%d')
-            enddate = "2023-06-15"
             for single_date in (startdate - timedelta(1) + timedelta(n) for n in
                                 range(delta.days)):
                 resp = fitbit.get(
                     "GET https://api.fitbit.com/1.2/user/-/sleep/date/"
-                    + single_date
+                    + single_date.strftime('%Y-%m-%d')
                     + ".json"
                 )
                 slp_list = []
