@@ -3135,37 +3135,35 @@ def fitbit_lastsynch_grab():
         except (Exception) as e:
             log.error("exception occured: %s", str(e))
 
-            ## get sleep data
-#       try:
-        if delta.days == 0:
-            startdate = datetime.strptime('2022-12-11', '%Y-%m-%d')
-            delta = datetime.strptime('2023-06-17', '%Y-%m-%d') - datetime.strptime('2022-12-11', '%Y-%m-%d')
-            for single_date in (startdate + timedelta(n) for n in
-                                range(delta.days)):
-                resp = fitbit.get(
-                    "/1.2/user/-/sleep/date/"
-                    + single_date.strftime('%Y-%m-%d')
-                    + ".json"
-                )
-                slp_list = []
-                log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
-                print("single_date ", single_date.strftime('%Y-%m-%d'))
-                if resp.json()["summary"].get("stages"):
-                    print(resp.json()["summary"])
-                    dict_in = {}
-                    dict_in["id"] = user
-                    dict_in["date"] = resp.json()["sleep"][0]["dateOfSleep"]
-                    dict_in["efficiency"] = resp.json()["sleep"][0]["efficiency"]
-                    dict_in["deep"] = resp.json()["summary"]["stages"]["deep"]
-                    dict_in["light"] = resp.json()["summary"]["stages"]["light"]
-                    dict_in["rem"] = resp.json()["summary"]["stages"]["rem"]
-                    dict_in["wake"] = resp.json()["summary"]["stages"]["wake"]
-                    dict_in["date_time"] = datetime.now()
-                    slp_list.append(dict_in)
-                sleep_df = pd.DataFrame(slp_list)
-                sleep_list.append(sleep_df)
-    #        except (Exception) as e:
-    #            log.error("exception occured: %s", str(e))
+        ## get sleep data
+        try:
+            if delta.days > 0:
+                for single_date in (datetime.strptime(startdate, '%Y-%m-%d') + timedelta(n) for n in
+                                    range(delta.days)):
+                    resp = fitbit.get(
+                        "/1.2/user/-/sleep/date/"
+                        + single_date.strftime('%Y-%m-%d')
+                        + ".json"
+                    )
+                    slp_list = []
+                    log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
+                    print("single_date ", single_date.strftime('%Y-%m-%d'))
+                    if resp.json()["summary"].get("stages"):
+                        print(resp.json()["summary"])
+                        dict_in = {}
+                        dict_in["id"] = user
+                        dict_in["date"] = resp.json()["sleep"][0]["dateOfSleep"]
+                        dict_in["efficiency"] = resp.json()["sleep"][0]["efficiency"]
+                        dict_in["deep"] = resp.json()["summary"]["stages"]["deep"]
+                        dict_in["light"] = resp.json()["summary"]["stages"]["light"]
+                        dict_in["rem"] = resp.json()["summary"]["stages"]["rem"]
+                        dict_in["wake"] = resp.json()["summary"]["stages"]["wake"]
+                        dict_in["date_time"] = datetime.now()
+                        slp_list.append(dict_in)
+                    sleep_df = pd.DataFrame(slp_list)
+                    sleep_list.append(sleep_df)
+        except (Exception) as e:
+            log.error("exception occured: %s", str(e))
 
     # end loop over users
 
@@ -3451,57 +3449,57 @@ def fitbit_lastsynch_grab():
 
     if len(sleep_list) > 0:
 
-#        try:
+        try:
 
-        bulk_sleep_df = pd.concat(sleep_list, axis=0)
-        pandas_gbq.to_gbq(
-            dataframe=bulk_sleep_df,
-            destination_table=_tablename("sync_sleep"),
-            project_id=project_id,
-            if_exists="append",
-            table_schema=[
-                {
-                    "name": "id",
-                    "type": "STRING",
-                    "mode": "REQUIRED",
-                    "description": "Primary Key",
-                },
-                {
-                    "name": "date",
-                    "type": "DATE",
-                    "mode": "REQUIRED",
-                    "description": "The date values were extracted",
-                },
-                {
-                    "name": "efficiency",
-                    "type": "INTEGER",
-                    "description": "sleep efficency",
-                },
-                {
-                    "name": "deep",
-                    "type": "INTEGER",
-                    "description": "deep sleep",
-                },
-                {
-                    "name": "light",
-                    "type": "INTEGER",
-                    "description": "light sleep",
-                },
-                {
-                    "name": "rem",
-                    "type": "INTEGER",
-                    "description": "rem sleep",
-                },
-                {
-                    "name": "wake",
-                    "type": "INTEGER",
-                    "description": "wake",
-                },
-                {"name": "date_time", "type": "TIMESTAMP"}
-            ],
-        )
-#        except (Exception) as e:
- #           log.error("exception occured: %s", str(e))
+            bulk_sleep_df = pd.concat(sleep_list, axis=0)
+            pandas_gbq.to_gbq(
+                dataframe=bulk_sleep_df,
+                destination_table=_tablename("sync_sleep"),
+                project_id=project_id,
+                if_exists="append",
+                table_schema=[
+                    {
+                        "name": "id",
+                        "type": "STRING",
+                        "mode": "REQUIRED",
+                        "description": "Primary Key",
+                    },
+                    {
+                        "name": "date",
+                        "type": "DATE",
+                        "mode": "REQUIRED",
+                        "description": "The date values were extracted",
+                    },
+                    {
+                        "name": "efficiency",
+                        "type": "INTEGER",
+                        "description": "sleep efficency",
+                    },
+                    {
+                        "name": "deep",
+                        "type": "INTEGER",
+                        "description": "deep sleep",
+                    },
+                    {
+                        "name": "light",
+                        "type": "INTEGER",
+                        "description": "light sleep",
+                    },
+                    {
+                        "name": "rem",
+                        "type": "INTEGER",
+                        "description": "rem sleep",
+                    },
+                    {
+                        "name": "wake",
+                        "type": "INTEGER",
+                        "description": "wake",
+                    },
+                    {"name": "date_time", "type": "TIMESTAMP"}
+                ],
+            )
+        except (Exception) as e:
+           log.error("exception occured: %s", str(e))
 
     if len(azm_list) > 0:
 
