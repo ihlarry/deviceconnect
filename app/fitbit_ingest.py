@@ -2985,7 +2985,6 @@ def fitbit_lastsynch_grab():
 
                 log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
                 steps = resp.json()["activities-steps"]
-                print("steps :", steps)
                 steps_df = pd.json_normalize(steps)
                 steps_columns = ["dateTime", "value"]
                 steps_df = _normalize_response2(
@@ -3140,7 +3139,7 @@ def fitbit_lastsynch_grab():
 #       try:
         if delta.days == 0:
             startdate = datetime.strptime('2022-12-11', '%Y-%m-%d')
-            delta = datetime.strptime('2023-06-15', '%Y-%m-%d') - datetime.strptime('2022-12-11', '%Y-%m-%d')
+            delta = datetime.strptime('2022-12-18', '%Y-%m-%d') - datetime.strptime('2022-12-11', '%Y-%m-%d')
             for single_date in (startdate - timedelta(1) + timedelta(n) for n in
                                 range(delta.days)):
                 resp = fitbit.get(
@@ -3151,8 +3150,8 @@ def fitbit_lastsynch_grab():
                 slp_list = []
                 log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
                 print("single_date ", single_date.strftime('%Y-%m-%d'))
-                print(resp.json)
                 if resp.json()["summary"].get("stages"):
+                    print(resp.json()["summary"])
                     dict_in = {}
                     dict_in["id"] = user
                     dict_in["date"] = resp.json()["sleep"][0]["dateOfSleep"]
@@ -3163,7 +3162,6 @@ def fitbit_lastsynch_grab():
                     dict_in["wake"] = resp.json()["summary"]["stages"]["wake"]
                     dict_in["date_time"] = datetime.now()
                     slp_list.append(dict_in)
-
                 sleep_df = pd.DataFrame(slp_list)
                 sleep_list.append(sleep_df)
     #        except (Exception) as e:
@@ -3453,56 +3451,56 @@ def fitbit_lastsynch_grab():
 
     if len(sleep_list) > 0:
 
-        try:
+#        try:
 
-            bulk_sleep_df = pd.concat(sleep_list, axis=0)
-            pandas_gbq.to_gbq(
-                dataframe=bulk_sleep_df,
-                destination_table=_tablename("sync_sleep"),
-                project_id=project_id,
-                if_exists="append",
-                table_schema=[
-                    {
-                        "name": "id",
-                        "type": "STRING",
-                        "mode": "REQUIRED",
-                        "description": "Primary Key",
-                    },
-                    {
-                        "name": "date_time",
-                        "type": "DATE",
-                        "mode": "REQUIRED",
-                        "description": "The date values were extracted",
-                    },
-                    {
-                        "name": "efficiency",
-                        "type": "INTEGER",
-                        "description": "sleep efficency",
-                    },
-                    {
-                        "name": "deep",
-                        "type": "INTEGER",
-                        "description": "deep sleep",
-                    },
-                    {
-                        "name": "light",
-                        "type": "INTEGER",
-                        "description": "light sleep",
-                    },
-                    {
-                        "name": "rem",
-                        "type": "INTEGER",
-                        "description": "rem sleep",
-                    },
-                    {
-                        "name": "wake",
-                        "type": "INTEGER",
-                        "description": "wake",
-                    }
-                ],
-            )
-        except (Exception) as e:
-            log.error("exception occured: %s", str(e))
+        bulk_sleep_df = pd.concat(sleep_list, axis=0)
+        pandas_gbq.to_gbq(
+            dataframe=bulk_sleep_df,
+            destination_table=_tablename("sync_sleep"),
+            project_id=project_id,
+            if_exists="append",
+            table_schema=[
+                {
+                    "name": "id",
+                    "type": "STRING",
+                    "mode": "REQUIRED",
+                    "description": "Primary Key",
+                },
+                {
+                    "name": "date_time",
+                    "type": "DATE",
+                    "mode": "REQUIRED",
+                    "description": "The date values were extracted",
+                },
+                {
+                    "name": "efficiency",
+                    "type": "INTEGER",
+                    "description": "sleep efficency",
+                },
+                {
+                    "name": "deep",
+                    "type": "INTEGER",
+                    "description": "deep sleep",
+                },
+                {
+                    "name": "light",
+                    "type": "INTEGER",
+                    "description": "light sleep",
+                },
+                {
+                    "name": "rem",
+                    "type": "INTEGER",
+                    "description": "rem sleep",
+                },
+                {
+                    "name": "wake",
+                    "type": "INTEGER",
+                    "description": "wake",
+                }
+            ],
+        )
+#        except (Exception) as e:
+ #           log.error("exception occured: %s", str(e))
 
     if len(azm_list) > 0:
 
