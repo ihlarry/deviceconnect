@@ -3142,7 +3142,7 @@ def fitbit_lastsynch_grab():
             startdate = "2022-12-11"
             delta = datetime.strptime('2023-06-15', '%Y-%m-%d') - datetime.strptime(startdate, '%Y-%m-%d')
             enddate = "2023-06-15"
-            for single_date in (startdate - datetime.timedelta(1) + datetime.timedelta(n) for n in
+            for single_date in (startdate - timedelta(1) + timedelta(n) for n in
                                 range(delta.days)):
                 resp = fitbit.get(
                     "GET https://api.fitbit.com/1.2/user/-/sleep/date/"
