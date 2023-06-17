@@ -3139,8 +3139,8 @@ def fitbit_lastsynch_grab():
 #       try:
         if delta.days == 0:
             startdate = datetime.strptime('2022-12-11', '%Y-%m-%d')
-            delta = datetime.strptime('2023-06-16', '%Y-%m-%d') - datetime.strptime('2022-12-11', '%Y-%m-%d')
-            for single_date in (startdate - timedelta(1) + timedelta(n) for n in
+            delta = datetime.strptime('2023-06-17', '%Y-%m-%d') - datetime.strptime('2022-12-11', '%Y-%m-%d')
+            for single_date in (startdate + timedelta(n) for n in
                                 range(delta.days)):
                 resp = fitbit.get(
                     "/1.2/user/-/sleep/date/"
