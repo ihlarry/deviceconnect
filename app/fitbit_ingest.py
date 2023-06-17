@@ -3112,39 +3112,6 @@ def fitbit_lastsynch_grab():
         except (Exception) as e:
             log.error("exception occured: %s", str(e))
 
-        ## get sleep data
-        try:
-            if delta.days == 0:
-                startdate = "2022-12-11"
-                delta = datetime.strptime('2023-06-15', '%Y-%m-%d') - datetime.strptime(startdate, '%Y-%m-%d')
-                enddate = "2023-06-15"
-                for single_date in (startdate - datetime.timedelta(1) + datetime.timedelta(n) for n in
-                                    range(delta.days)):
-                    resp = fitbit.get(
-                        "GET https://api.fitbit.com/1.2/user/-/sleep/date/"
-                        + single_date
-                        + ".json"
-                    )
-                    slp_list = []
-                    log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
-
-                    if resp.json()["summary"].get("stages"):
-                        dict_in = {}
-                        dict_in["id"] = user
-                        dict_in["date"] = resp.json()["sleep"][0]["dateOfSleep"]
-                        dict_in["efficiency"] = resp.json()["sleep"][0]["efficiency"]
-                        dict_in["deep"] = resp.json()["summary"]["stages"]["deep"]
-                        dict_in["light"] = resp.json()["summary"]["stages"]["light"]
-                        dict_in["rem"] = resp.json()["summary"]["stages"]["rem"]
-                        dict_in["wake"] = resp.json()["summary"]["stages"]["wake"]
-                        dict_in["date_time"] = datetime.now()
-                        slp_list.append(dict_in)
-
-                    sleep_df = pd.DataFrame(slp_list)
-                    sleep_list.append(sleep_df)
-        except (Exception) as e:
-            log.error("exception occured: %s", str(e))
-
         ## get activity zone minutes
         try:
             if delta.days > 0:
@@ -3168,6 +3135,39 @@ def fitbit_lastsynch_grab():
                 azm_list.append(azm_df)
         except (Exception) as e:
             log.error("exception occured: %s", str(e))
+
+            ## get sleep data
+#       try:
+        if delta.days == 0:
+            startdate = "2022-12-11"
+            delta = datetime.strptime('2023-06-15', '%Y-%m-%d') - datetime.strptime(startdate, '%Y-%m-%d')
+            enddate = "2023-06-15"
+            for single_date in (startdate - datetime.timedelta(1) + datetime.timedelta(n) for n in
+                                range(delta.days)):
+                resp = fitbit.get(
+                    "GET https://api.fitbit.com/1.2/user/-/sleep/date/"
+                    + single_date
+                    + ".json"
+                )
+                slp_list = []
+                log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
+
+                if resp.json()["summary"].get("stages"):
+                    dict_in = {}
+                    dict_in["id"] = user
+                    dict_in["date"] = resp.json()["sleep"][0]["dateOfSleep"]
+                    dict_in["efficiency"] = resp.json()["sleep"][0]["efficiency"]
+                    dict_in["deep"] = resp.json()["summary"]["stages"]["deep"]
+                    dict_in["light"] = resp.json()["summary"]["stages"]["light"]
+                    dict_in["rem"] = resp.json()["summary"]["stages"]["rem"]
+                    dict_in["wake"] = resp.json()["summary"]["stages"]["wake"]
+                    dict_in["date_time"] = datetime.now()
+                    slp_list.append(dict_in)
+
+                sleep_df = pd.DataFrame(slp_list)
+                sleep_list.append(sleep_df)
+    #        except (Exception) as e:
+    #            log.error("exception occured: %s", str(e))
 
     # end loop over users
 
