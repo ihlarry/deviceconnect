@@ -2957,14 +2957,18 @@ def fitbit_lastsynch_grab():
                 fitls = device_df.iloc[0]["last_sync_time"].split('T')
                 fitlastsync = datetime.strptime(fitls[0], '%Y-%m-%d')
                 if lastsyncstored:
+                    # last sync date stored in bigquery device
                     startdate = lastsyncstored
+                    # must be at least 1 day between date stored in biquery and fitbit device table
                     delta = datetime.strptime(fitls[0], '%Y-%m-%d') - datetime.strptime(lastsyncstored, '%Y-%m-%d')
+                    # end data always should be previous day from last sync in fitbit device table
                     enddate = (fitlastsync.date() - timedelta(days=1)).strftime('%Y-%m-%d')
                     print(fitlastsync.strftime('%Y-%m-%d %H:%M:%S.%f'), startdate, str(delta.days))
                 else:
                     delta = datetime.strptime(fitls[0], '%Y-%m-%d') - datetime.strptime(_date_pulled(), '%Y-%m-%d')
                     startdate = (fitlastsync.date() - timedelta(days=1)).strftime('%Y-%m-%d')
-                    enddate = date.today() - timedelta(days=1)
+                    enddate = (fitlastsync.date() - timedelta(days=1)).strftime('%Y-%m-%d')
+                   # enddate = (date.today() - timedelta(days=1)).strtftime('%Y-%m-%d')
                 device_df["last_sync_time"] = device_df["last_sync_time"].apply(
                    lambda x: datetime.strptime(x, "%Y-%m-%dT%H:%M:%S.%f")
                 )
