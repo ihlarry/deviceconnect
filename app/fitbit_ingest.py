@@ -2929,6 +2929,8 @@ def fitbit_lastsynch_grab():
             last_sync_stored = fpoint.get_lastsynch()
             if last_sync_stored != "":
                 lastsyncstored = last_sync_stored.strftime('%Y-%m-%d')
+            else:
+                lastsyncstored = ""
             resp = fitbit.get("1/user/-/devices.json")
 
             log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
@@ -2966,6 +2968,7 @@ def fitbit_lastsynch_grab():
                     delta = datetime.strptime(fitls[0], '%Y-%m-%d') - datetime.strptime(_date_pulled(), '%Y-%m-%d')
                     startdate = (fitlastsync.date() - timedelta(days=1)).strftime('%Y-%m-%d')
                     enddate = (fitlastsync.date() - timedelta(days=1)).strftime('%Y-%m-%d')
+                    print(str(delta.days), startdate, enddate)
                    # enddate = (date.today() - timedelta(days=1)).strtftime('%Y-%m-%d')
                 device_df["last_sync_time"] = device_df["last_sync_time"].apply(
                    lambda x: datetime.strptime(x, "%Y-%m-%dT%H:%M:%S.%f")
