@@ -2927,10 +2927,8 @@ def fitbit_lastsynch_grab():
             ############## CONNECT TO DEVICE ENDPOINT #################
             fpoint = fitbit_data(user)
             last_sync_stored = fpoint.get_lastsynch()
-            if last_sync_stored is not None:
+            if last_sync_stored != "":
                 lastsyncstored = last_sync_stored.strftime('%Y-%m-%d')
-            else:
-                lastsyncstored = ""
             resp = fitbit.get("1/user/-/devices.json")
 
             log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
