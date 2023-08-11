@@ -2951,7 +2951,7 @@ def fitbit_lastsynch_grab():
                     "lastSyncTime",
                 ]
                 device_df = _normalize_response(
-                    device_df, device_columns, user, date_pulled
+                    device_df, device_columns, user, date.today().strftime("%Y-%m-%d")
                 )
                 print("last_sync ", device_df["last_sync_time"])
                 fitls = device_df.iloc[0]["last_sync_time"].split('T')
@@ -2976,9 +2976,11 @@ def fitbit_lastsynch_grab():
                 device_list.append(device_df)
         except (Exception) as e:
             log.error("exception occured: %s", str(e))
-
+        startdate = "2023-08-09"
+        enddate = "2023-08-09"
         try:
-            if delta.days > 0:
+            if delta.days == 0:
+
 
                 resp = fitbit.get(
                     "/1/user/-/activities/steps/date/"
@@ -3002,7 +3004,7 @@ def fitbit_lastsynch_grab():
 
         ## get heart rate zones
         try:
-            if delta.days > 0:
+            if delta.days == 0:
                 resp = fitbit.get(
                     "1/user/-/activities/heart/date/"
                     + startdate
@@ -3069,7 +3071,7 @@ def fitbit_lastsynch_grab():
 
         ## get vo2max
         try:
-            if delta.days > 0:
+            if delta.days == 0:
 
                 resp = fitbit.get(
                     "/1/user/-/cardioscore/date/"
@@ -3093,7 +3095,7 @@ def fitbit_lastsynch_grab():
 
         ## get hrv
         try:
-            if delta.days > 0:
+            if delta.days == 0:
 
                 resp = fitbit.get(
                     "/1/user/-/hrv/date/"
@@ -3118,7 +3120,7 @@ def fitbit_lastsynch_grab():
 
         ## get activity zone minutes
         try:
-            if delta.days > 0:
+            if delta.days == 0:
 
                 resp = fitbit.get(
                     "/1/user/-/activities/active-zone-minutes/date/"
@@ -3142,7 +3144,7 @@ def fitbit_lastsynch_grab():
 
         ## get sleep data
         try:
-            if delta.days > 0:
+            if delta.days == 0:
                 for single_date in (datetime.strptime(startdate, '%Y-%m-%d') + timedelta(n) for n in
                                     range(delta.days)):
                     resp = fitbit.get(
@@ -3615,7 +3617,7 @@ class fitbit_data():
         query_job = client.query(sql, job_config=job_config)
         results = query_job.result()
         for row in results:
-            print(row.last_sync_time)
+            print("from get_lastsynch ", row.last_sync_time)
             last_sync_stored = row.last_sync_time
         return last_sync_stored
 
