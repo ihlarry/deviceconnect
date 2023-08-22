@@ -2907,6 +2907,7 @@ def fitbit_lastsynch_grab():
     azm_list = []
     hr_zones_list = []
     sleep_list = []
+    temp_list = []
 
     for user in user_list:
 
@@ -3170,6 +3171,32 @@ def fitbit_lastsynch_grab():
         except (Exception) as e:
             log.error("exception occured: %s", str(e))
 
+        ## get skin temp
+        try:
+            if delta.days > 0:
+                resp = fitbit.get(
+                    "/1/user/-/temp/skin/date/"
+                    + startdate
+                    + "/"
+                    + enddate
+                    + ".json"
+                )
+
+                log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
+                temp = resp.json()["tempSkin"]
+                temp_df = pd.json_normalize(temp)
+
+                temp_columns = [
+                    "dateTime",
+                    "logType",
+                    "value.nightlyRelative"
+                ]
+                temp_df = _normalize_response2(
+                    temp_df, temp_columns, user
+                )
+                temp_list.append(temp_df)
+        except (Exception) as e:
+            log.error("exception occured: %s", str(e))
     # end loop over users
 
     fitbit_stop = timeit.default_timer()
@@ -3538,6 +3565,51 @@ def fitbit_lastsynch_grab():
             )
         except (Exception) as e:
             log.error("exception occured: %s", str(e))
+
+    if len(temp_list) > 0:
+        try:
+
+            bulk_temp_df = pd.concat(temp_list, axis=0)
+
+            pandas_gbq.to_gbq(
+                dataframe=bulk_temp_df,
+                destination_table=_tablename("skintemp"),
+                project_id=project_id,
+                if_exists="append",
+                table_schema=[
+                    {
+                        "name": "id",
+                        "type": "STRING",
+                        "mode": "REQUIRED",
+                        "description": "Primary Key",
+                    },
+                    {
+                        "name": "date",
+                        "type": "DATE",
+                        "mode": "REQUIRED",
+                        "description": "The date values were extracted",
+                    },
+                    {
+                        "name": "date_time",
+                        "type": "DATE",
+                        "mode": "REQUIRED",
+                        "description": "the date of the measurements",
+                    },
+                    {
+                        "name": "log_type",
+                        "type": "STRING",
+                        "description": "The type of skin temperature log created",
+                    },
+                    {
+                        "name": "value_nightly_relative",
+                        "type": "FLOAT",
+                        "description": "The user's average temperature during a period of sleep.",
+                    }
+                ],
+            )
+
+        except (Exception) as e:
+           log.error("temp exception occured: %s", str(e))
 
     if len(device_list) > 0:
 
