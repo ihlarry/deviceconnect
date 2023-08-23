@@ -3172,6 +3172,7 @@ def fitbit_lastsynch_grab():
             log.error("exception occured: %s", str(e))
 
         ## get skin temp
+        """
         try:
             if delta.days > 0:
                 resp = fitbit.get(
@@ -3197,7 +3198,8 @@ def fitbit_lastsynch_grab():
                 temp_list.append(temp_df)
         except (Exception) as e:
             log.error("exception occured: %s", str(e))
-    # end loop over users
+        """
+# end loop over users
 
     fitbit_stop = timeit.default_timer()
     fitbit_execution_time = fitbit_stop - start
@@ -3565,7 +3567,7 @@ def fitbit_lastsynch_grab():
             )
         except (Exception) as e:
             log.error("exception occured: %s", str(e))
-
+    """
     if len(temp_list) > 0:
         try:
 
@@ -3610,7 +3612,7 @@ def fitbit_lastsynch_grab():
 
         except (Exception) as e:
            log.error("temp exception occured: %s", str(e))
-
+    """
     if len(device_list) > 0:
 
         try:
