@@ -2885,6 +2885,113 @@ def fitbit_temp_scope():
     return "temp Scope Loaded"
 
 #
+# intra activity
+#
+@bp.route("/fitbit_intra_activity")
+def fitbit_intra_activity():
+    start = timeit.default_timer()
+    project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
+    # if caller provided date as query params, use that otherwise use yesterday
+    date_pulled = request.args.get("date", _date_pulled())
+    user_list = fitbit_bp.storage.all_users()
+    if request.args.get("user") in user_list:
+        user_list = [request.args.get("user")]
+
+    pd.set_option("display.max_columns", 500)
+
+    activity_list = []
+
+    for user in user_list:
+
+        log.debug("user: %s", user)
+
+        fitbit_bp.storage.user = user
+
+        if fitbit_bp.session.token:
+            del fitbit_bp.session.token
+
+        try:
+#            resp = fitbit.get(f"/1/user/-/activities/list.json?afterDate={date_pulled}&sort=asc&limit=50&offset=0")
+            resp = fitbit.get(f"/1/user/-/activities/list.json?afterDate=2023-09-19&sort=asc&limit=50&offset=0")
+
+            actin_list = []
+            log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
+            for item in resp.json()["activities"]:
+                dict_in = {}
+                dict_in["id"] = user
+                dict_in["active_duration"] = item["activeDuration"]
+                dict_in["activity_name"] = item["activityName"]
+                dict_in["start_time"] = item["originalStartTime"]
+                dict_in["steps"] = item["steps"]
+                dict_in["date_time"] = datetime.now()
+                actin_list.append(dict_in)
+
+            act_df = pd.DataFrame(actin_list)
+            activity_list.append(act_df)
+
+        except (Exception) as e:
+            log.error("temp exception occured: %s", str(e))
+
+    # end loop over users
+
+    fitbit_stop = timeit.default_timer()
+    fitbit_execution_time = fitbit_stop - start
+    print("Activity Intra Scope: " + str(fitbit_execution_time))
+
+    if len(activity_list) > 0:
+
+       try:
+
+            bulk_activity_df = pd.concat(activity_list, axis=0)
+
+            pandas_gbq.to_gbq(
+                dataframe=bulk_activity_df,
+                destination_table=_tablename("intra_activity"),
+                project_id=project_id,
+                if_exists="append",
+                table_schema=[
+                    {
+                        "name": "id",
+                        "type": "STRING",
+                        "mode": "REQUIRED",
+                        "description": "Primary Key",
+                    },
+                    {
+                        "name": "active_duration",
+                        "type": "INTEGER",
+                        "description": "length of activity in milliseconds",
+                    },
+                    {
+                        "name": "activity_name",
+                        "type": "STRING",
+                         "description": "name of activity",
+                    },
+                    {
+                        "name": "start_time",
+                        "type": "TIMESTAMP",
+                        "description": "timestamp when activity started",
+                    },
+                    {
+                        "name": "steps",
+                        "type": "INTEGER",
+                        "description": "number of steps taken",
+                    },
+                    {"name": "date_time", "type": "TIMESTAMP"}
+                ],
+            )
+
+       except (Exception) as e:
+           log.error("temp exception occured: %s", str(e))
+
+    stop = timeit.default_timer()
+    execution_time = stop - start
+    print("Intra Activty Loaded: " + str(execution_time))
+
+    fitbit_bp.storage.user = None
+
+    return "intra activity Loaded"
+
+#
 # Intraday Data
 #
 @bp.route("/fitbit_lastsynch_grab")
