@@ -2910,29 +2910,29 @@ def fitbit_intra_activity():
         if fitbit_bp.session.token:
             del fitbit_bp.session.token
 
-        try:
+#        try:
 #            resp = fitbit.get(f"/1/user/-/activities/list.json?afterDate={date_pulled}&sort=asc&limit=50&offset=0")
-            resp = fitbit.get(f"/1/user/-/activities/list.json?afterDate=2023-09-19&sort=asc&limit=50&offset=0")
+        resp = fitbit.get(f"/1/user/-/activities/list.json?afterDate=2023-09-19&sort=asc&limit=50&offset=0")
 
-            actin_list = []
-            log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
-            for item in resp.json()["activities"]:
-                dict_in = {}
-                dict_in["id"] = user
-                dict_in["active_duration"] = item["activeDuration"]
-                dict_in["activity_name"] = item["activityName"]
-                dict_in["start_time"] = item["originalStartTime"]
-                dict_in["steps"] = item["steps"]
-                dict_in["date_time"] = datetime.now()
-                actin_list.append(dict_in)
+        actin_list = []
+        log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
+        for item in resp.json()["activities"]:
+            dict_in = {}
+            dict_in["id"] = user
+            dict_in["active_duration"] = item["activeDuration"]
+            dict_in["activity_name"] = item["activityName"]
+            dict_in["start_time"] = item["originalStartTime"]
+            dict_in["steps"] = item["steps"]
+            dict_in["date_time"] = datetime.now()
+            actin_list.append(dict_in)
 
-            act_df = pd.DataFrame(actin_list)
-            act_df["start_time"] = pd.to_datetime(act_df['timestamp'], utc=True)
-            print(act_df)
-            activity_list.append(act_df)
+        act_df = pd.DataFrame(actin_list)
+        act_df["start_time"] = pd.to_datetime(act_df['timestamp'], utc=True)
+        print(act_df)
+        activity_list.append(act_df)
 
-        except (Exception) as e:
-            log.error("temp exception occured: %s", str(e))
+#        except (Exception) as e:
+#            log.error("temp exception occured: %s", str(e))
 
     # end loop over users
 
