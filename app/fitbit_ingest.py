@@ -2927,7 +2927,7 @@ def fitbit_intra_activity():
             actin_list.append(dict_in)
 
         act_df = pd.DataFrame(actin_list)
-        act_df["start_time"] = pd.to_datetime(act_df['timestamp'], utc=True)
+        act_df["start_time"] = pd.to_datetime(act_df['start_time'], utc=True)
         print(act_df)
         activity_list.append(act_df)
 
