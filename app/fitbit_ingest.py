@@ -2927,6 +2927,7 @@ def fitbit_intra_activity():
                 actin_list.append(dict_in)
 
             act_df = pd.DataFrame(actin_list)
+            print(act_df)
             activity_list.append(act_df)
 
         except (Exception) as e:
@@ -2940,48 +2941,48 @@ def fitbit_intra_activity():
 
     if len(activity_list) > 0:
 
-       try:
+ #      try:
 
-            bulk_activity_df = pd.concat(activity_list, axis=0)
+        bulk_activity_df = pd.concat(activity_list, axis=0)
 
-            pandas_gbq.to_gbq(
-                dataframe=bulk_activity_df,
-                destination_table=_tablename("intra_activity"),
-                project_id=project_id,
-                if_exists="append",
-                table_schema=[
-                    {
-                        "name": "id",
-                        "type": "STRING",
-                        "mode": "REQUIRED",
-                        "description": "Primary Key",
-                    },
-                    {
-                        "name": "active_duration",
-                        "type": "INTEGER",
-                        "description": "length of activity in milliseconds",
-                    },
-                    {
-                        "name": "activity_name",
-                        "type": "STRING",
-                         "description": "name of activity",
-                    },
-                    {
-                        "name": "start_time",
-                        "type": "TIMESTAMP",
-                        "description": "timestamp when activity started",
-                    },
-                    {
-                        "name": "steps",
-                        "type": "INTEGER",
-                        "description": "number of steps taken",
-                    },
-                    {"name": "date_time", "type": "TIMESTAMP"}
-                ],
-            )
+        pandas_gbq.to_gbq(
+            dataframe=bulk_activity_df,
+            destination_table=_tablename("intra_activity"),
+            project_id=project_id,
+            if_exists="append",
+            table_schema=[
+                {
+                    "name": "id",
+                    "type": "STRING",
+                    "mode": "REQUIRED",
+                    "description": "Primary Key",
+                },
+                {
+                    "name": "active_duration",
+                    "type": "INTEGER",
+                    "description": "length of activity in milliseconds",
+                },
+                {
+                    "name": "activity_name",
+                    "type": "STRING",
+                     "description": "name of activity",
+                },
+                {
+                    "name": "start_time",
+                    "type": "TIMESTAMP",
+                    "description": "timestamp when activity started",
+                },
+                {
+                    "name": "steps",
+                    "type": "INTEGER",
+                    "description": "number of steps taken",
+                },
+                {"name": "date_time", "type": "TIMESTAMP"}
+            ],
+        )
 
-       except (Exception) as e:
-           log.error("temp exception occured: %s", str(e))
+#       except (Exception) as e:
+#           log.error("temp exception occured: %s", str(e))
 
     stop = timeit.default_timer()
     execution_time = stop - start
