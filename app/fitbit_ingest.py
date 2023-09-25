@@ -2912,7 +2912,8 @@ def fitbit_intra_activity():
             del fitbit_bp.session.token
 
         try:
-            resp = fitbit.get(f"/1/user/-/activities/list.json?afterDate={date_pulled}&sort=asc&limit=50&offset=0")
+            resp = fitbit.get(f"/1/user/-/activities/list.json?afterDate={date_pulled}"
+                              f"&beforeDate={today_date}&sort=asc&limit=50&offset=0")
 #            resp = fitbit.get(f"/1/user/-/activities/list.json?afterDate=2023-09-19&sort=asc&limit=50&offset=0")
 
             actin_list = []
@@ -3017,6 +3018,7 @@ def fitbit_lastsynch_grab():
     hr_zones_list = []
     sleep_list = []
     temp_list = []
+    activity_list = []
 
     for user in user_list:
 
@@ -3086,6 +3088,7 @@ def fitbit_lastsynch_grab():
                 device_list.append(device_df)
         except (Exception) as e:
             log.error("exception occured: %s", str(e))
+
         try:
             if delta.days > 0:
 
@@ -3176,6 +3179,31 @@ def fitbit_lastsynch_grab():
                 hr_zones_list.append(hr_df)
         except (Exception) as e:
             log.error("exception occured: %s", str(e))
+
+        ## get intraday activity
+        try:
+            if delta.days > 0:
+                resp = fitbit.get(f"/1/user/-/activities/list.json?afterDate={startdate}&sort=asc&limit=50&offset=0")
+                actin_list = []
+                log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
+                endd = datetime.strptime(fitls[0], '%Y-%m-%d').date()
+                for item in resp.json()["activities"]:
+                    datein= datetime.fromisoformat(item["originalStartTime"]).date()
+                    if datein < endd:
+                        dict_in = {}
+                        dict_in["id"] = user
+                        dict_in["active_duration"] = item["activeDuration"]
+                        dict_in["activity_name"] = item["activityName"]
+                        dict_in["start_time"] = item["originalStartTime"]
+                        dict_in["steps"] = item["steps"]
+                        dict_in["date_time"] = datetime.now()
+                        actin_list.append(dict_in)
+
+                act_df = pd.DataFrame(actin_list)
+                act_df["start_time"] = pd.to_datetime(act_df['start_time'])
+                activity_list.append(act_df)
+        except (Exception) as e:
+            log.error("temp exception occured: %s", str(e))
 
         ## get vo2max
         try:
@@ -3518,6 +3546,51 @@ def fitbit_lastsynch_grab():
             )
         except (Exception) as e:
             log.error("exception occured: %s", str(e))
+
+    if len(activity_list) > 0:
+
+        try:
+
+            bulk_activity_df = pd.concat(activity_list, axis=0)
+
+            pandas_gbq.to_gbq(
+                dataframe=bulk_activity_df,
+                destination_table=_tablename("intra_activity"),
+                project_id=project_id,
+                if_exists="append",
+                table_schema=[
+                    {
+                        "name": "id",
+                        "type": "STRING",
+                        "mode": "REQUIRED",
+                        "description": "Primary Key",
+                    },
+                    {
+                        "name": "active_duration",
+                        "type": "INTEGER",
+                        "description": "length of activity in milliseconds",
+                    },
+                    {
+                        "name": "activity_name",
+                        "type": "STRING",
+                        "description": "name of activity",
+                    },
+                    {
+                        "name": "start_time",
+                        "type": "TIMESTAMP",
+                        "description": "timestamp when activity started",
+                    },
+                    {
+                        "name": "steps",
+                        "type": "INTEGER",
+                        "description": "number of steps taken",
+                    },
+                    {"name": "date_time", "type": "TIMESTAMP"}
+                ],
+            )
+
+        except (Exception) as e:
+            log.error("temp exception occured: %s", str(e))
 
     if len(cs_list) > 0:
 
