@@ -2892,6 +2892,7 @@ def fitbit_intra_activity():
     start = timeit.default_timer()
     project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
     # if caller provided date as query params, use that otherwise use yesterday
+    today_date = date.today().strftime("%Y-%m-%d")
     date_pulled = request.args.get("date", _date_pulled())
     user_list = fitbit_bp.storage.all_users()
     if request.args.get("user") in user_list:
@@ -2911,7 +2912,7 @@ def fitbit_intra_activity():
             del fitbit_bp.session.token
 
         try:
-            resp = fitbit.get(f"/1/user/-/activities/list.json?afterDate={date_pulled}&sort=asc&limit=50&offset=0")
+            resp = fitbit.get(f"/1/user/-/activities/list.json?afterDate={date_pulled}&beforeDate={today_date}&sort=asc&limit=50&offset=0")
 #            resp = fitbit.get(f"/1/user/-/activities/list.json?afterDate=2023-09-19&sort=asc&limit=50&offset=0")
 
             actin_list = []
