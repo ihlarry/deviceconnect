@@ -2912,7 +2912,7 @@ def fitbit_intra_activity():
             del fitbit_bp.session.token
 
         try:
-            resp = fitbit.get(f"/1/user/-/activities/list.json?afterDate={date_pulled}&beforeDate={today_date}&sort=asc&limit=50&offset=0")
+            resp = fitbit.get(f"/1/user/-/activities/list.json?afterDate={date_pulled}&sort=asc&limit=50&offset=0")
 #            resp = fitbit.get(f"/1/user/-/activities/list.json?afterDate=2023-09-19&sort=asc&limit=50&offset=0")
 
             actin_list = []
