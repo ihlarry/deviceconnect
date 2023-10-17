@@ -3182,8 +3182,8 @@ def fitbit_lastsynch_grab():
 
         ## get intraday activity
         try:
-            if delta.days > 0:
-                resp = fitbit.get(f"/1/user/-/activities/list.json?afterDate={startdate}&sort=asc&limit=50&offset=0")
+            if delta.days == 0:
+                resp = fitbit.get(f"/1/user/-/activities/list.json?afterDate=2023-10-15&sort=asc&limit=50&offset=0")
                 actin_list = []
                 log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
                 endd = datetime.strptime(fitls[0], '%Y-%m-%d').date()
@@ -3200,10 +3200,11 @@ def fitbit_lastsynch_grab():
                         actin_list.append(dict_in)
 
                 act_df = pd.DataFrame(actin_list)
+                print(act_df)
                 act_df["start_time"] = pd.to_datetime(act_df['start_time'])
                 activity_list.append(act_df)
         except (Exception) as e:
-            log.error("temp exception occured: %s", str(e))
+            log.error("exercise exception occured: %s", str(e))
 
         ## get vo2max
         try:
