@@ -2930,7 +2930,6 @@ def fitbit_intra_activity():
 
             act_df = pd.DataFrame(actin_list)
             act_df["start_time"] = pd.to_datetime(act_df['start_time'], utc=True)
-            print(act_df)
             activity_list.append(act_df)
         except (Exception) as e:
             log.error("temp exception occured: %s", str(e))
