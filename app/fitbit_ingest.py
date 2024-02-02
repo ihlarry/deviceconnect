@@ -3860,7 +3860,7 @@ class fitbit_data():
         print(self.email)
         sql = """
             SELECT last_sync_time FROM `pericardits.fitbit.device` 
-            where id = @id and last_sync_time = (select max(last_sync_time) from `pericardits.fitbit.device` where id = @id)
+            where id = @id and last_sync_time = (select max(last_sync_time) from `pericardits.fitbit.device` where id = @id) LIMIT 1
         """
         job_config = bigquery.QueryJobConfig(
             query_parameters=[
