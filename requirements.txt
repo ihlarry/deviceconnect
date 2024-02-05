@@ -19,6 +19,7 @@ google-cloud-datastore
 google-cloud-secret-manager
 google-cloud-storage
 google-cloud-firestore
+google-cloud-logging==3.9.0
 
 parse
 skimpy

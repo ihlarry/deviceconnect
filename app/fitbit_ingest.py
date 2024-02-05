@@ -65,6 +65,7 @@ import os
 import json
 import timeit
 from datetime import date, datetime, timedelta
+from google.cloud import logging as cloud_logging
 import logging
 
 import pandas as pd
@@ -80,7 +81,8 @@ from google.cloud import bigquery
 
 client = bigquery.Client(project="pericardits")
 
-
+logging_client = cloud_logging.Client()
+logging_client.setup_logging()
 log = logging.getLogger(__name__)
 
 
@@ -3024,10 +3026,13 @@ def fitbit_lastsynch_grab():
         a = datetime.strptime('1/1/2023', "%m/%d/%Y")
         b = datetime.strptime('1/1/2023', "%m/%d/%Y")
 
+        log_data = {
+            "user_id": user,
+            "route": "/fitbit_lastsynch_grab"
+        }
 
         delta = b - a
-
-        log.debug("user: %s", user)
+        log.info("entering loop, grab user", extra={'extra': log_data})
 
         fitbit_bp.storage.user = user
 
@@ -3044,7 +3049,7 @@ def fitbit_lastsynch_grab():
                 lastsyncstored = ""
             resp = fitbit.get("1/user/-/devices.json")
 
-            log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
+            log.info("%s: %d [%s]", resp.url, resp.status_code, resp.reason, extra={'extra': log_data})
 
             device_df = pd.json_normalize(resp.json())
             if not device_df.empty:
@@ -3065,6 +3070,7 @@ def fitbit_lastsynch_grab():
                     device_df, device_columns, user, date.today().strftime("%Y-%m-%d")
                 )
                 print("last_sync ", device_df["last_sync_time"])
+                log.info("%s: %s", "last synch time", device_df["last_sync_time"], extra={'extra': log_data})
                 fitls = device_df.iloc[0]["last_sync_time"].split('T')
                 fitlastsync = datetime.strptime(fitls[0], '%Y-%m-%d')
                 if lastsyncstored:
@@ -3086,7 +3092,7 @@ def fitbit_lastsynch_grab():
                 )
                 device_list.append(device_df)
         except (Exception) as e:
-            log.error("exception occured: %s", str(e))
+            log.error("exception occured: %s", str(e), extra={'extra': log_data})
 
         try:
             if delta.days > 0:
@@ -3100,7 +3106,7 @@ def fitbit_lastsynch_grab():
                     + ".json"
                 )
 
-                log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
+                log.info("%s: %d [%s]", resp.url, resp.status_code, resp.reason, extra={'extra': log_data})
                 steps = resp.json()["activities-steps"]
                 steps_df = pd.json_normalize(steps)
                 steps_columns = ["dateTime", "value"]
@@ -3110,7 +3116,7 @@ def fitbit_lastsynch_grab():
                 steps_df["value"] = pd.to_numeric(steps_df["value"])
                 steps_list.append(steps_df)
         except (Exception) as e:
-            log.error("exception occured: %s", str(e))
+            log.error("exception occured: %s", str(e), extra={'extra': log_data})
 
         ## get heart rate zones
         try:
@@ -3123,7 +3129,7 @@ def fitbit_lastsynch_grab():
                     + ".json"
                 )
                 hrz_list = []
-                log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
+                log.info("%s: %d [%s]", resp.url, resp.status_code, resp.reason, extra={'extra': log_data} )
                 for item in resp.json()["activities-heart"]:
                     dict_in = {}
                     dict_in["id"] = user
@@ -3177,14 +3183,14 @@ def fitbit_lastsynch_grab():
                 hr_df = pd.DataFrame(hrz_list)
                 hr_zones_list.append(hr_df)
         except (Exception) as e:
-            log.error("exception occured: %s", str(e))
+            log.error("exception occured: %s", str(e), extra={'extra': log_data})
 
         ## get intraday activity
         try:
             if delta.days > 0:
                 resp = fitbit.get(f"/1/user/-/activities/list.json?afterDate={startdate}&sort=asc&limit=50&offset=0")
                 actin_list = []
-                log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
+                log.info("%s: %d [%s]", resp.url, resp.status_code, resp.reason, extra={'extra': log_data})
                 endd = datetime.strptime(fitls[0], '%Y-%m-%d').date()
                 for item in resp.json()["activities"]:
                     datein= datetime.fromisoformat(item["originalStartTime"]).date()
@@ -3202,7 +3208,7 @@ def fitbit_lastsynch_grab():
                 act_df["start_time"] = pd.to_datetime(act_df['start_time'])
                 activity_list.append(act_df)
         except (Exception) as e:
-            log.error("exercise exception occured: %s", str(e))
+            log.error("exercise exception occured: %s", str(e), extra={'extra': log_data})
 
         ## get vo2max
         try:
@@ -3216,7 +3222,7 @@ def fitbit_lastsynch_grab():
                     + ".json"
                 )
 
-                log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
+                log.info("%s: %d [%s]", resp.url, resp.status_code, resp.reason, extra={'extra': log_data})
                 cardioscore = resp.json()["cardioScore"]
                 cs_df = pd.json_normalize(cardioscore)
                 cs_columns = ["dateTime",
@@ -3226,7 +3232,7 @@ def fitbit_lastsynch_grab():
                 )
                 cs_list.append(cs_df)
         except (Exception) as e:
-            log.error("exception occured: %s", str(e))
+            log.error("exception occured: %s", str(e), extra={'extra': log_data})
 
         ## get hrv
         try:
@@ -3240,7 +3246,7 @@ def fitbit_lastsynch_grab():
                     + ".json"
                 )
 
-                log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
+                log.info("%s: %d [%s]", resp.url, resp.status_code, resp.reason, extra={'extra': log_data})
                 hrvread = resp.json()["hrv"]
                 hrv_df = pd.json_normalize(hrvread)
                 hrv_columns = ["dateTime",
@@ -3251,7 +3257,7 @@ def fitbit_lastsynch_grab():
                 )
                 hrv_list.append(hrv_df)
         except (Exception) as e:
-            log.error("exception occured: %s", str(e))
+            log.error("exception occured: %s", str(e), extra={'extra': log_data})
 
         ## get activity zone minutes
         try:
@@ -3265,7 +3271,7 @@ def fitbit_lastsynch_grab():
                     + ".json"
                 )
 
-                log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
+                log.info("%s: %d [%s]", resp.url, resp.status_code, resp.reason, extra={'extra': log_data})
                 azm = resp.json()["activities-active-zone-minutes"]
                 azm_df = pd.json_normalize(azm)
                 azm_columns = ["dateTime",
@@ -3275,7 +3281,7 @@ def fitbit_lastsynch_grab():
                 )
                 azm_list.append(azm_df)
         except (Exception) as e:
-            log.error("exception occured: %s", str(e))
+            log.error("exception occured: %s", str(e), extra={'extra': log_data})
 
         ## get sleep data
         try:
@@ -3288,8 +3294,8 @@ def fitbit_lastsynch_grab():
                         + ".json"
                     )
                     slp_list = []
-                    log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
-                    print("single_date ", single_date.strftime('%Y-%m-%d'))
+                    log.info("%s: %d [%s]", resp.url, resp.status_code, resp.reason, extra={'extra': log_data})
+                    log.info("single_date ", single_date.strftime('%Y-%m-%d'), extra={'extra': log_data})
                     if resp.json()["summary"].get("stages"):
                         print(resp.json()["summary"])
                         dict_in = {}
@@ -3305,7 +3311,7 @@ def fitbit_lastsynch_grab():
                     sleep_df = pd.DataFrame(slp_list)
                     sleep_list.append(sleep_df)
         except (Exception) as e:
-            log.error("exception occured: %s", str(e))
+            log.error("exception occured: %s", str(e), extra={'extra': log_data})
 
         ## get skin temp
         """
@@ -3372,7 +3378,7 @@ def fitbit_lastsynch_grab():
                 ],
             )
         except (Exception) as e:
-            log.error("exception occured: %s", str(e))
+            log.error("Table: sync_steps exception occured: %s", str(e), extra={'extra': log_data})
 
     if len(hr_zones_list) > 0:
 
@@ -3544,7 +3550,7 @@ def fitbit_lastsynch_grab():
                 ],
             )
         except (Exception) as e:
-            log.error("exception occured: %s", str(e))
+            log.error("Table: sync_heart_rate_zones exception occured: %s", str(e), extra={'extra': log_data})
 
     if len(activity_list) > 0:
 
@@ -3589,7 +3595,7 @@ def fitbit_lastsynch_grab():
             )
 
         except (Exception) as e:
-            log.error("temp exception occured: %s", str(e))
+            log.error("Table: intra_activity temp exception occured: %s", str(e), extra={'extra': log_data})
 
     if len(cs_list) > 0:
 
@@ -3622,7 +3628,7 @@ def fitbit_lastsynch_grab():
                 ],
             )
         except (Exception) as e:
-            log.error("exception occured: %s", str(e))
+            log.error("Table: vo2max exception occured: %s", str(e),extra={'extra': log_data})
 
     if len(hrv_list) > 0:
 
@@ -3660,7 +3666,7 @@ def fitbit_lastsynch_grab():
                 ],
             )
         except (Exception) as e:
-            log.error("exception occured: %s", str(e))
+            log.error("Table: hrv exception occured: %s", str(e), extra={'extra': log_data})
 
     if len(sleep_list) > 0:
 
@@ -3714,7 +3720,7 @@ def fitbit_lastsynch_grab():
                 ],
             )
         except (Exception) as e:
-           log.error("exception occured: %s", str(e))
+           log.error("Table: sync_sleep exception occured: %s", str(e), extra={'extra': log_data})
 
     if len(azm_list) > 0:
 
@@ -3747,7 +3753,7 @@ def fitbit_lastsynch_grab():
                 ],
             )
         except (Exception) as e:
-            log.error("exception occured: %s", str(e))
+            log.error("Table: activezoneminutes exception occured: %s", str(e), extra={'extra': log_data})
     """
     if len(temp_list) > 0:
         try:
@@ -3840,7 +3846,7 @@ def fitbit_lastsynch_grab():
             )
 
         except (Exception) as e:
-            log.error("exception occured: %s", str(e))
+            log.error("Table: device exception occured: %s", str(e), extra={'extra': log_data})
 
     fitbit_bp.storage.user = None
 
