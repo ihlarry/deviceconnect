@@ -3077,9 +3077,8 @@ def fitbit_lastsynch_grab():
                 device_df = _normalize_response(
                     device_df, device_columns, user, date.today().strftime("%Y-%m-%d")
                 )
-                print("last_sync ", device_df["last_sync_time"])
                 log_data = {
-                    "message": f"last synch time: {device_df['last_sync_time']}",
+                    "message": f"last synch time: {device_df.iloc[0]['last_sync_time']}",
                     "user_id": user,
                     "route": "/fitbit_lastsynch_grab"
                 }
