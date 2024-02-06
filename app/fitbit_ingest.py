@@ -3036,7 +3036,6 @@ def fitbit_lastsynch_grab():
 
         delta = b - a
         logger.log_struct(log_data, severity="INFO")
- #       log.info("entering loop, grab user", extra=log_data)
 
         fitbit_bp.storage.user = user
 
