@@ -129,7 +129,8 @@ def auth():
 def logout():
 
     id_token = session.get("id_token")
-    redirect_uri = url_for("index", _external=True)
+#    redirect_uri = url_for("index", _external=True)
+    redirect_uri = "https://widelenshealth.com"
 
     #
     # clear session tokens
