@@ -3022,6 +3022,7 @@ def fitbit_lastsynch_grab():
     sleep_list = []
     temp_list = []
     activity_list = []
+    br_list = []
 
     for user in user_list:
 
@@ -3322,6 +3323,40 @@ def fitbit_lastsynch_grab():
                 "route": "/fitbit_lastsynch_grab"
             }
             logger.log_struct(log_data, severity="ERROR")
+
+        ## get breathing_rate
+        try:
+            if delta.days > 0:
+
+                resp = fitbit.get(
+                    "/1/user/-/br/date/"
+                    + startdate
+                    + "/"
+                    + enddate
+                    + ".json"
+                )
+                log_data = {
+                    "message": f"{resp.url}: {resp.status_code} [{resp.reason}]",
+                    "user_id": user,
+                    "route": "/fitbit_lastsynch_grab"
+                }
+                logger.log_struct(log_data, severity="INFO")
+                brread = resp.json()["br"]
+                br_df = pd.json_normalize(brread)
+                br_columns = ["dateTime",
+                              "value.breathingRate"]
+                br_df = _normalize_response2(
+                    br_df, br_columns, user
+                )
+                br_list.append(br_df)
+        except (Exception) as e:
+            log_data = {
+                "message": f"exception occured: {str(e)}",
+                "user_id": user,
+                "route": "/fitbit_lastsynch_grab"
+            }
+            logger.log_struct(log_data, severity="ERROR")
+
 
         ## get activity zone minutes
         try:
@@ -3776,6 +3811,44 @@ def fitbit_lastsynch_grab():
         except (Exception) as e:
             log_data = {
                 "message": f"Table: hrv exception occurred: {str(e)}",
+                "user_id": user,
+                "route": "/fitbit_lastsynch_grab"
+            }
+            logger.log_struct(log_data, severity="ERROR")
+
+    if len(br_list) > 0:
+
+        try:
+
+            bulk_br_df = pd.concat(br_list, axis=0)
+            pandas_gbq.to_gbq(
+                dataframe=bulk_br_df,
+                destination_table=_tablename("breathrate"),
+                project_id=project_id,
+                if_exists="append",
+                table_schema=[
+                    {
+                        "name": "id",
+                        "type": "STRING",
+                        "mode": "REQUIRED",
+                        "description": "Primary Key",
+                    },
+                    {
+                        "name": "date_time",
+                        "type": "DATE",
+                        "mode": "REQUIRED",
+                        "description": "The date values were extracted",
+                    },
+                    {
+                        "name": "value_breathing_rate",
+                        "type": "FLOAT",
+                        "description": "breathing rate- breaths per min",
+                    }
+                ],
+            )
+        except (Exception) as e:
+            log_data = {
+                "message": f"Table: breathing rate exception occurred: {str(e)}",
                 "user_id": user,
                 "route": "/fitbit_lastsynch_grab"
             }
