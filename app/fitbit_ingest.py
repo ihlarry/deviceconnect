@@ -3086,6 +3086,7 @@ def fitbit_lastsynch_grab():
                 logger.log_struct(log_data, severity="INFO")
                 fitls = device_df.iloc[0]["last_sync_time"].split('T')
                 fitlastsync = datetime.strptime(fitls[0], '%Y-%m-%d')
+                # if need to test adding new metric, set startdate and enddate equal and allow delta.days = 0 for new metric.
                 if lastsyncstored:
                     # last sync date stored in bigquery device
                     startdate = lastsyncstored
