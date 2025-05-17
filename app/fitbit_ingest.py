@@ -630,7 +630,6 @@ def fitbit_body_weight():
         user_list = [request.args.get("user")]
 
     pd.set_option("display.max_columns", 500)
-
     body_weight_df_list = []
 
     for user in user_list:

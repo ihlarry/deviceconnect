@@ -165,6 +165,13 @@ def _normalize_response(df, column_list, user_email):
     df.insert(0, "id", user_email)
     df.insert(1, "date", date_pulled)
     df.insert(14, "surgery_date", date_pulled)
+    # Convert nullable columns
+    if "user.age" in df.columns:
+        df["user.age"] = df["user.age"].astype("Int64")
+    if "user.height" in df.columns:
+        df["user.height"] = df["user.height"].astype("Float64")
+    if "user.dateOfBirth" in df.columns:
+        df["user.dateOfBirth"] = df["user.dateOfBirth"].astype(pd.StringDtype())
     df = clean_columns(df)
 
     return df
@@ -174,10 +181,8 @@ def _export_profile_to_bigquery(id, profile):
 
     project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
 
-    print(profile['user']['city'])
 #    del profile['user']['topBadges']
     profile_df = pd.json_normalize(profile)
-    print("print 1")
     print(profile_df.to_string())
     profile_columns = [
         "user.age",
@@ -194,7 +199,6 @@ def _export_profile_to_bigquery(id, profile):
         "user.timezone",
     ]
     profile_df = _normalize_response(profile_df, profile_columns, id)
-    print("print 2")
     print(profile_df.to_string())
     pandas_gbq.to_gbq(
         dataframe=profile_df,
