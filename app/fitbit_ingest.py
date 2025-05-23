@@ -3208,7 +3208,7 @@ def fitbit_lastsynch_grab():
                         dict_in["above_minutes"] = None
                         dict_in["above_min_hr"] = None
                         dict_in["above_max_hr"] = None
-                    dict_in["resting_heart_rate"] = item["value"]["restingHeartRate"]
+                    dict_in["resting_heart_rate"] = item["value"].get("restingHeartRate", None)
                     dict_in["date_time"] = datetime.now()
                     hrz_list.append(dict_in)
 
