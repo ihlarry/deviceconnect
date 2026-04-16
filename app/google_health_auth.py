@@ -74,8 +74,10 @@ def oauth2callback():
     if user is None:
         return redirect("/")
 
+    # Security fix: Re-attach state to the flow before verification
     state = session.get('state')
     flow = get_flow()
+    flow.state = state
     flow.redirect_uri = url_for('google_health_auth_bp.oauth2callback', _external=True)
 
     authorization_response = request.url
@@ -83,21 +85,39 @@ def oauth2callback():
     if authorization_response.startswith('http://'):
         authorization_response = authorization_response.replace('http://', 'https://')
         
-    flow.fetch_token(authorization_response=authorization_response)
-    credentials = flow.credentials
+    # Fix: Prevent 'Warning: Scope has changed' from crashing the handshake
+    # Google Health API often returns more/different scopes than requested
+    os.environ['OAUTHLIB_RELAX_TOKEN_SCOPE'] = '1'
     
-    # Structure token dictionary to mirror legacy expectations
-    # Include credentials.scopes as a space-separated string
-    token_dict = {
-        'access_token': credentials.token,
-        'refresh_token': credentials.refresh_token,
-        'token_type': 'Bearer',
-        'expires_in': (credentials.expiry - datetime.utcnow()).total_seconds() if credentials.expiry else 3600,
-        'expires_at': credentials.expiry.timestamp() if credentials.expiry else None,
-        'scope': ' '.join(credentials.scopes) if credentials.scopes else ''
-    }
-    
-    username = user["email"]
-    firestorage.save_google_token(username, token_dict)
+    try:
+        flow.fetch_token(authorization_response=authorization_response)
+        credentials = flow.credentials
+        
+        # Calculate expires_in safely (handling timezone-aware datetimes)
+        if credentials.expiry:
+            # Ensure we don't subtract aware vs naive datetimes
+            expiry = credentials.expiry.replace(tzinfo=None)
+            now = datetime.utcnow()
+            expires_in = (expiry - now).total_seconds()
+        else:
+            expires_in = 3600
+
+        # Structure token dictionary to mirror legacy expectations
+        token_dict = {
+            'access_token': credentials.token,
+            'refresh_token': credentials.refresh_token,
+            'token_type': 'Bearer',
+            'expires_in': expires_in,
+            'expires_at': credentials.expiry.timestamp() if credentials.expiry else None,
+            'scope': ' '.join(credentials.scopes) if credentials.scopes else ''
+        }
+        
+        username = user["email"]
+        firestorage.save_google_token(username, token_dict)
+        
+    except Exception as e:
+        log.error("Google Health Callback Error: %s", str(e))
+        # You might want to flash a message to the user here
+        return f"Authentication failed: {str(e)}", 500
     
     return redirect("/")
