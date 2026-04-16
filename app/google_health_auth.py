@@ -16,9 +16,7 @@ GOOGLE_HEALTH_SCOPES = [
     "https://www.googleapis.com/auth/userinfo.profile",
     "https://www.googleapis.com/auth/googlehealth.activity_and_fitness", # Includes heart_rate
     "https://www.googleapis.com/auth/googlehealth.sleep",
-    "https://www.googleapis.com/auth/googlehealth.nutrition",
-    "https://www.googleapis.com/auth/googlehealth.body_measurements",    # Includes weight
-    "https://www.googleapis.com/auth/googlehealth.vitals"               # Includes oxygen_saturation
+    "https://www.googleapis.com/auth/googlehealth.nutrition"
 ]
 
 firestore_datasetname = os.environ.get("FIRESTORE_DATASET", "tokens")
