@@ -14,12 +14,11 @@ GOOGLE_HEALTH_SCOPES = [
     "openid",
     "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/userinfo.profile",
-    "https://www.googleapis.com/auth/googlehealth.activity_and_fitness",
+    "https://www.googleapis.com/auth/googlehealth.activity_and_fitness", # Includes heart_rate
     "https://www.googleapis.com/auth/googlehealth.sleep",
-    "https://www.googleapis.com/auth/googlehealth.body_and_weight",
     "https://www.googleapis.com/auth/googlehealth.nutrition",
-    "https://www.googleapis.com/auth/googlehealth.heart_rate",
-    "https://www.googleapis.com/auth/googlehealth.oxygen_saturation",
+    "https://www.googleapis.com/auth/googlehealth.body_measurements",    # Includes weight
+    "https://www.googleapis.com/auth/googlehealth.vitals"               # Includes oxygen_saturation
 ]
 
 firestore_datasetname = os.environ.get("FIRESTORE_DATASET", "tokens")
