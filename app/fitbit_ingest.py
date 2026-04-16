@@ -62,6 +62,7 @@ Notes:
 """
 
 import os
+import math
 import json
 import timeit
 from datetime import date, datetime, timedelta
@@ -74,6 +75,10 @@ from flask import Blueprint, request
 from flask_dance.contrib.fitbit import fitbit
 from authlib.integrations.flask_client import OAuth
 from skimpy import clean_columns
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
+from google.auth.transport.requests import AuthorizedSession
+import requests
 
 from .fitbit_auth import fitbit_bp
 
@@ -169,6 +174,35 @@ def _date_pulled():
 
     date_pulled = date.today() - timedelta(days=1)
     return date_pulled.strftime("%Y-%m-%d")
+
+
+def _get_google_session(user_email):
+    """Retrieve an authorized Google session for the given user"""
+    # Assuming the storage is using FirestoreStorage which handles users
+    fitbit_bp.storage.user = user_email
+    token = fitbit_bp.storage.get(fitbit_bp)
+
+    if not token or token.get('oauth_type') != 'google':
+        return None
+
+    client_id = os.environ.get("GOOGLE_HEALTH_CLIENT_ID")
+    client_secret = os.environ.get("GOOGLE_HEALTH_CLIENT_SECRET")
+
+    # Fallback to general openid credentials if specific ones aren't set
+    if not client_id or not client_secret:
+        client_id = os.environ.get("OPENID_AUTH_CLIENT_ID")
+        client_secret = os.environ.get("OPENID_AUTH_CLIENT_SECRET")
+
+    creds = Credentials(
+        token=token.get('access_token'),
+        refresh_token=token.get('refresh_token'),
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=client_id,
+        client_secret=client_secret
+    )
+
+    # AuthorizedSession will handle refreshing the token when it's used
+    return AuthorizedSession(creds)
 
 
 #
@@ -2212,6 +2246,92 @@ def fitbit_intraday_scope():
     return "Intraday Scope Loaded"
 
 
+def _map_google_sleep(data_points, user, date_pulled):
+    """Map Google Health sleep data points to legacy Fitbit table formats"""
+    sleep_rows = []
+    
+    total_minutes_asleep = 0
+    total_time_in_bed = 0
+    stages_deep = 0
+    stages_light = 0
+    stages_rem = 0
+    stages_wake = 0
+    
+    for dp in data_points:
+        sleep = dp.get('sleep', {})
+        interval = sleep.get('interval', {})
+        summary = sleep.get('summary', {})
+        stages_summary = summary.get('stagesSummary', [])
+        
+        # Mapping to 'sleep' table
+        start_time_str = interval.get('startTime')
+        end_time_str = interval.get('endTime')
+        
+        # Basic log_id from timestamp
+        try:
+            log_id = int(datetime.strptime(start_time_str, "%Y-%m-%dT%H:%M:%SZ").timestamp())
+        except:
+            log_id = 0
+
+        # Stages mapping
+        awake_count = sum(int(s.get('count', 0)) for s in stages_summary if s.get('type') == 'AWAKE')
+        
+        # Efficiency mapping: (minutesAsleep / minutesInSleepPeriod) * 100, rounded up
+        minutes_asleep = int(summary.get('minutesAsleep', 0))
+        minutes_in_bed = int(summary.get('minutesInSleepPeriod', 0))
+        efficiency = 0
+        if minutes_in_bed > 0:
+            efficiency = math.ceil((minutes_asleep / minutes_in_bed) * 100)
+
+        row = {
+            'awakeCount': awake_count,
+            'awakeDuration': int(summary.get('minutesAwake', 0)),
+            'awakeningsCount': awake_count, 
+            'dateOfSleep': start_time_str.split('T')[0] if start_time_str else date_pulled,
+            'duration': minutes_in_bed * 60000,
+            'efficiency': efficiency,
+            'endTime': end_time_str,
+            'isMainSleep': True,
+            'logId': log_id,
+            'minutesAfterWakeup': int(summary.get('minutesAfterWakeUp', 0)),
+            'minutesAsleep': int(summary.get('minutesAsleep', 0)),
+            'minutesAwake': int(summary.get('minutesAwake', 0)),
+            'minutesToFallAsleep': int(summary.get('minutesToFallAsleep', 0)),
+            'restlessCount': None,
+            'restlessDuration': None,
+            'startTime': start_time_str,
+            'timeInBed': int(summary.get('minutesInSleepPeriod', 0))
+        }
+        sleep_rows.append(row)
+        
+        # Aggregating for 'sleep_summary'
+        total_minutes_asleep += int(summary.get('minutesAsleep', 0))
+        total_time_in_bed += int(summary.get('minutesInSleepPeriod', 0))
+        
+        for stage in stages_summary:
+            stype = stage.get('type')
+            minutes = int(stage.get('minutes', 0))
+            if stype == 'DEEP': stages_deep += minutes
+            elif stype == 'LIGHT': stages_light += minutes
+            elif stype == 'REM': stages_rem += minutes
+            elif stype == 'AWAKE': stages_wake += minutes
+
+    sleep_df = pd.DataFrame(sleep_rows)
+    
+    summary_row = {
+        'totalMinutesAsleep': total_minutes_asleep,
+        'totalSleepRecords': len(data_points),
+        'totalTimeInBed': total_time_in_bed,
+        'stages.deep': stages_deep,
+        'stages.light': stages_light,
+        'stages.rem': stages_rem,
+        'stages.wake': stages_wake
+    }
+    summary_df = pd.DataFrame([summary_row])
+    
+    return sleep_df, summary_df
+
+
 #
 # Sleep Data
 #
@@ -2230,102 +2350,116 @@ def fitbit_sleep_scope():
     sleep_list = []
     sleep_summary_list = []
     sleep_minutes_list = []
-    # omh_sleep_list = []
+
+    sleep_columns = [
+        "awakeCount",
+        "awakeDuration",
+        "awakeningsCount",
+        "dateOfSleep",
+        "duration",
+        "efficiency",
+        "endTime",
+        "isMainSleep",
+        "logId",
+        "minutesAfterWakeup",
+        "minutesAsleep",
+        "minutesAwake",
+        "minutesToFallAsleep",
+        "restlessCount",
+        "restlessDuration",
+        "startTime",
+        "timeInBed",
+    ]
+    sleep_summary_columns = [
+        "totalMinutesAsleep",
+        "totalSleepRecords",
+        "totalTimeInBed",
+        "stages.deep",
+        "stages.light",
+        "stages.rem",
+        "stages.wake",
+    ]
 
     for user in user_list:
-
         log.debug("user: %s", user)
-
         fitbit_bp.storage.user = user
 
-        if fitbit_bp.session.token:
-            del fitbit_bp.session.token
-
         try:
+            oauth_type = fitbit_bp.storage.get_oauth_type(user)
+            log.debug(f"Handling {oauth_type} for user {user}")
 
-            resp = fitbit.get("/1/user/-/sleep/date/" + date_pulled + ".json")
+            if oauth_type == 'google':
+                google_session = _get_google_session(user)
+                if not google_session:
+                    log.error(f"Could not get Google session for {user}")
+                    continue
 
-            log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
+                # Calculate dates for filter (date_pulled is YYYY-MM-DD)
+                start_dt = datetime.strptime(date_pulled, "%Y-%m-%d")
+                end_dt = start_dt + timedelta(days=1)
+                start_iso = start_dt.strftime("%Y-%m-%dT00:00:00Z")
+                end_iso = end_dt.strftime("%Y-%m-%dT00:00:00Z")
 
-            sleep = resp.json()["sleep"]
+                # The endpoint and filter format provided by the user
+                url = f"https://health.googleapis.com/v4/users/me/dataTypes/sleep/dataPoints?filter=sleep.interval.end_time >= \"{start_iso}\" AND sleep.interval.end_time < \"{end_iso}\"&fields=dataPoints/sleep/interval,dataPoints/sleep/summary"
+                
+                resp = google_session.get(url)
+                log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
 
-            # if "minuteData" in resp.json().keys():
-            #     sleep_minutes = resp.json()["sleep"][0]["minuteData"]
-            #     sleep_minutes_df = pd.json_normalize(sleep_minutes)
-            #     sleep_minutes_columns = ["dateTime", "value"]
-            #     sleep_minutes_df = _normalize_response(
-            #         sleep_minutes_df, sleep_minutes_columns, user, date_pulled
-            #     )
-            # else:
-            #     cols = ["dateTime", "value"]
-            #     sleep_minutes_df = pd.DataFrame(columns=cols)
-            #     sleep_minutes_df = _normalize_response(
-            #         sleep_minutes_df, cols, user, date_pulled
-            #     )
-            # sleep_minutes_df["date_time"] = pd.to_datetime(
-            #     date_pulled + " " + sleep_minutes_df["date_time"]
-            # )
-            # sleep_minutes_list.append(sleep_minutes_df)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    data_points = data.get('dataPoints', [])
+                    
+                    if not data_points:
+                        log.info(f"No Google Health sleep data for {user} on {date_pulled}")
+                        continue
 
-            sleep_summary = resp.json()["summary"]
-            sleep_df = pd.json_normalize(sleep)
-            sleep_summary_df = pd.json_normalize(sleep_summary)
+                    sleep_df, sleep_summary_df = _map_google_sleep(data_points, user, date_pulled)
+                    
+                    # Normalize to ensure all columns exist and are cleaned
+                    sleep_df = _normalize_response(sleep_df, sleep_columns, user, date_pulled)
+                    # Google already provides ISO timestamps
+                    sleep_df["end_time"] = pd.to_datetime(sleep_df["end_time"])
+                    sleep_df["start_time"] = pd.to_datetime(sleep_df["start_time"])
 
-            try:
-                sleep_df = sleep_df.drop(["minuteData"], axis=1)
-            except:
-                pass
+                    sleep_summary_df = _normalize_response(sleep_summary_df, sleep_summary_columns, user, date_pulled)
 
-            sleep_columns = [
-                "awakeCount",
-                "awakeDuration",
-                "awakeningsCount",
-                "dateOfSleep",
-                "duration",
-                "efficiency",
-                "endTime",
-                "isMainSleep",
-                "logId",
-                "minutesAfterWakeup",
-                "minutesAsleep",
-                "minutesAwake",
-                "minutesToFallAsleep",
-                "restlessCount",
-                "restlessDuration",
-                "startTime",
-                "timeInBed",
-            ]
-            sleep_summary_columns = [
-                "totalMinutesAsleep",
-                "totalSleepRecords",
-                "totalTimeInBed",
-                "stages.deep",
-                "stages.light",
-                "stages.rem",
-                "stages.wake",
-            ]
+                    sleep_list.append(sleep_df)
+                    sleep_summary_list.append(sleep_summary_df)
+                else:
+                    log.error(f"Google Health API error for {user}: {resp.status_code} {resp.reason}")
 
-            # Fill missing columns
-            sleep_df = _normalize_response(
-                sleep_df, sleep_columns, user, date_pulled
-            )
-            sleep_df["end_time"] = pd.to_datetime(
-                date_pulled + " " + sleep_df["end_time"]
-            )
-            sleep_df["start_time"] = pd.to_datetime(
-                date_pulled + " " + sleep_df["start_time"]
-            )
+            else:  # legacy fitbit logic
+                if fitbit_bp.session.token:
+                    del fitbit_bp.session.token
 
-            sleep_summary_df = _normalize_response(
-                sleep_summary_df, sleep_summary_columns, user, date_pulled
-            )
+                resp = fitbit.get("/1/user/-/sleep/date/" + date_pulled + ".json")
+                log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
 
-            # Append dfs to df list
-            sleep_list.append(sleep_df)
-            sleep_summary_list.append(sleep_summary_df)
+                sleep = resp.json()["sleep"]
+                sleep_summary = resp.json()["summary"]
+                sleep_df = pd.json_normalize(sleep)
+                sleep_summary_df = pd.json_normalize(sleep_summary)
+
+                try:
+                    sleep_df = sleep_df.drop(["minuteData"], axis=1)
+                except:
+                    pass
+
+                # Fill missing columns and clean
+                sleep_df = _normalize_response(sleep_df, sleep_columns, user, date_pulled)
+                # Fitbit provides time only, need to prepend date
+                sleep_df["end_time"] = pd.to_datetime(date_pulled + " " + sleep_df["end_time"])
+                sleep_df["start_time"] = pd.to_datetime(date_pulled + " " + sleep_df["start_time"])
+
+                sleep_summary_df = _normalize_response(sleep_summary_df, sleep_summary_columns, user, date_pulled)
+
+                # Append dfs to df list
+                sleep_list.append(sleep_df)
+                sleep_summary_list.append(sleep_summary_df)
 
         except (Exception) as e:
-            log.error("exception occured: %s", str(e))
+            log.error("exception occured for user %s: %s", user, str(e))
 
     # end loop over users
 
@@ -3043,67 +3177,82 @@ def fitbit_lastsynch_grab():
             del fitbit_bp.session.token
 
         try:
-            ############## CONNECT TO DEVICE ENDPOINT #################
+            ############## DETERMINE SYNC DATES BASED ON OAUTH TYPE #################
+            oauth_type = fitbit_bp.storage.get_oauth_type(user)
+            
             fpoint = fitbit_data(user)
             last_sync_stored = fpoint.get_lastsynch()
             if last_sync_stored != "":
                 lastsyncstored = last_sync_stored.strftime('%Y-%m-%d')
             else:
                 lastsyncstored = ""
-            resp = fitbit.get("1/user/-/devices.json")
 
-            log_data = {
-                "message": f"{resp.url}: {resp.status_code} [{resp.reason}]",
-                "user_id": user,
-                "route": "/fitbit_lastsynch_grab"
-            }
-            logger.log_struct(log_data, severity="INFO")
+            if oauth_type == 'google':
+                # --- GOOGLE HEALTH API FALLBACK ---
+                # Devices endpoint is legacy. Calculate delta strictly from DB recorded sync.
+                if lastsyncstored:
+                    startdate = lastsyncstored
+                    enddate = (date.today() - timedelta(days=1)).strftime('%Y-%m-%d')
+                    delta = datetime.strptime(enddate, '%Y-%m-%d') - datetime.strptime(startdate, '%Y-%m-%d')
+                    print(f"Google User {user}: Delta from DB is {delta.days} days")
+                else:
+                    startdate = (date.today() - timedelta(days=1)).strftime('%Y-%m-%d')
+                    enddate = (date.today() - timedelta(days=1)).strftime('%Y-%m-%d')
+                    delta = datetime.strptime(enddate, '%Y-%m-%d') - datetime.strptime(startdate, '%Y-%m-%d')
+            else:
+                # --- EXISTING ALGORITHM FOR FITBIT LEGACY ---
+                resp = fitbit.get("1/user/-/devices.json")
 
-            device_df = pd.json_normalize(resp.json())
-            if not device_df.empty:
-                try:
-                    device_df = device_df.drop(
-                        ["features", "id", "mac", "type"], axis=1
-                    )
-                except:
-                    pass
-
-                device_columns = [
-                    "battery",
-                    "batteryLevel",
-                    "deviceVersion",
-                    "lastSyncTime",
-                ]
-                device_df = _normalize_response(
-                    device_df, device_columns, user, date.today().strftime("%Y-%m-%d")
-                )
                 log_data = {
-                    "message": f"last synch time: {device_df.iloc[0]['last_sync_time']}",
+                    "message": f"{resp.url}: {resp.status_code} [{resp.reason}]",
                     "user_id": user,
                     "route": "/fitbit_lastsynch_grab"
                 }
                 logger.log_struct(log_data, severity="INFO")
-                fitls = device_df.iloc[0]["last_sync_time"].split('T')
-                fitlastsync = datetime.strptime(fitls[0], '%Y-%m-%d')
-                # if need to test adding new metric, set startdate and enddate equal and allow delta.days = 0 for new metric.
-                if lastsyncstored:
-                    # last sync date stored in bigquery device
-                    startdate = lastsyncstored
-                    # must be at least 1 day between date stored in biquery and fitbit device table
-                    delta = datetime.strptime(fitls[0], '%Y-%m-%d') - datetime.strptime(lastsyncstored, '%Y-%m-%d')
-                    # end data always should be previous day from last sync in fitbit device table
-                    enddate = (fitlastsync.date() - timedelta(days=1)).strftime('%Y-%m-%d')
-                    print(fitlastsync.strftime('%Y-%m-%d %H:%M:%S.%f'), startdate, str(delta.days))
-                else:
-                    delta = datetime.strptime(fitls[0], '%Y-%m-%d') - datetime.strptime(_date_pulled(), '%Y-%m-%d')
-                    startdate = (fitlastsync.date() - timedelta(days=1)).strftime('%Y-%m-%d')
-                    enddate = (fitlastsync.date() - timedelta(days=1)).strftime('%Y-%m-%d')
-                    print(str(delta.days), startdate, enddate)
-                   # enddate = (date.today() - timedelta(days=1)).strtftime('%Y-%m-%d')
-                device_df["last_sync_time"] = device_df["last_sync_time"].apply(
-                   lambda x: datetime.strptime(x, "%Y-%m-%dT%H:%M:%S.%f")
-                )
-                device_list.append(device_df)
+
+                device_df = pd.json_normalize(resp.json())
+                if not device_df.empty:
+                    try:
+                        device_df = device_df.drop(
+                            ["features", "id", "mac", "type"], axis=1
+                        )
+                    except:
+                        pass
+
+                    device_columns = [
+                        "battery",
+                        "batteryLevel",
+                        "deviceVersion",
+                        "lastSyncTime",
+                    ]
+                    device_df = _normalize_response(
+                        device_df, device_columns, user, date.today().strftime("%Y-%m-%d")
+                    )
+                    log_data = {
+                        "message": f"last synch time: {device_df.iloc[0]['last_sync_time']}",
+                        "user_id": user,
+                        "route": "/fitbit_lastsynch_grab"
+                    }
+                    logger.log_struct(log_data, severity="INFO")
+                    fitls = device_df.iloc[0]["last_sync_time"].split('T')
+                    fitlastsync = datetime.strptime(fitls[0], '%Y-%m-%d')
+                    
+                    if lastsyncstored:
+                        # last sync date stored in bigquery device
+                        startdate = lastsyncstored
+                        delta = datetime.strptime(fitls[0], '%Y-%m-%d') - datetime.strptime(lastsyncstored, '%Y-%m-%d')
+                        enddate = (fitlastsync.date() - timedelta(days=1)).strftime('%Y-%m-%d')
+                        print(fitlastsync.strftime('%Y-%m-%d %H:%M:%S.%f'), startdate, str(delta.days))
+                    else:
+                        delta = datetime.strptime(fitls[0], '%Y-%m-%d') - datetime.strptime(_date_pulled(), '%Y-%m-%d')
+                        startdate = (fitlastsync.date() - timedelta(days=1)).strftime('%Y-%m-%d')
+                        enddate = (fitlastsync.date() - timedelta(days=1)).strftime('%Y-%m-%d')
+                        print(str(delta.days), startdate, enddate)
+                        
+                    device_df["last_sync_time"] = device_df["last_sync_time"].apply(
+                       lambda x: datetime.strptime(x, "%Y-%m-%dT%H:%M:%S.%f")
+                    )
+                    device_list.append(device_df)
         except (Exception) as e:
             log_data = {
                 "message": f"exception occured: {str(e)}",
@@ -3113,8 +3262,7 @@ def fitbit_lastsynch_grab():
             logger.log_struct(log_data, severity="ERROR")
 
         try:
-            if delta.days > 0:
-
+            if oauth_type != 'google' and delta.days > 0:
 
                 resp = fitbit.get(
                     "/1/user/-/activities/steps/date/"
@@ -3147,7 +3295,7 @@ def fitbit_lastsynch_grab():
 
         ## get heart rate zones
         try:
-            if delta.days > 0:
+            if oauth_type != 'google' and delta.days > 0:
                 resp = fitbit.get(
                     "1/user/-/activities/heart/date/"
                     + startdate
@@ -3224,7 +3372,7 @@ def fitbit_lastsynch_grab():
 
         ## get intraday activity
         try:
-            if delta.days > 0:
+            if oauth_type != 'google' and delta.days > 0:
                 resp = fitbit.get(f"/1/user/-/activities/list.json?afterDate={startdate}&sort=asc&limit=50&offset=0")
                 actin_list = []
                 log_data = {
@@ -3233,6 +3381,7 @@ def fitbit_lastsynch_grab():
                     "route": "/fitbit_lastsynch_grab"
                 }
                 logger.log_struct(log_data, severity="INFO")
+                # endd check based on fitls from legacy branch. If google user this try block is skipped.
                 endd = datetime.strptime(fitls[0], '%Y-%m-%d').date()
                 for item in resp.json()["activities"]:
                     datein= datetime.fromisoformat(item["originalStartTime"]).date()
@@ -3259,7 +3408,7 @@ def fitbit_lastsynch_grab():
 
         ## get vo2max
         try:
-            if delta.days > 0:
+            if oauth_type != 'google' and delta.days > 0:
 
                 resp = fitbit.get(
                     "/1/user/-/cardioscore/date/"
@@ -3292,7 +3441,7 @@ def fitbit_lastsynch_grab():
 
         ## get hrv
         try:
-            if delta.days > 0:
+            if oauth_type != 'google' and delta.days > 0:
 
                 resp = fitbit.get(
                     "/1/user/-/hrv/date/"
@@ -3326,7 +3475,7 @@ def fitbit_lastsynch_grab():
 
         ## get breathing_rate
         try:
-            if delta.days > 0:
+            if oauth_type != 'google' and delta.days > 0:
 
                 resp = fitbit.get(
                     "/1/user/-/br/date/"
@@ -3360,7 +3509,7 @@ def fitbit_lastsynch_grab():
 
         ## get activity zone minutes
         try:
-            if delta.days > 0:
+            if oauth_type != 'google' and delta.days > 0:
 
                 resp = fitbit.get(
                     "/1/user/-/activities/active-zone-minutes/date/"
@@ -3394,40 +3543,98 @@ def fitbit_lastsynch_grab():
         ## get sleep data
         try:
             if delta.days > 0:
-                for single_date in (datetime.strptime(startdate, '%Y-%m-%d') + timedelta(n) for n in
-                                    range(delta.days)):
-                    resp = fitbit.get(
-                        "/1.2/user/-/sleep/date/"
-                        + single_date.strftime('%Y-%m-%d')
-                        + ".json"
-                    )
-                    slp_list = []
-                    log_data = {
-                        "message": f"sleep_date: {single_date.strftime('%Y-%m-%d')}",
-                        "user_id": user,
-                        "route": "/fitbit_lastsynch_grab"
-                    }
-                    logger.log_struct(log_data, severity="INFO")
-                    log_data = {
-                        "message": f"{resp.url}: {resp.status_code} [{resp.reason}]",
-                        "user_id": user,
-                        "route": "/fitbit_lastsynch_grab"
-                    }
-                    logger.log_struct(log_data, severity="INFO")
-                    if resp.json()["summary"].get("stages"):
-                        print(resp.json()["summary"])
-                        dict_in = {}
-                        dict_in["id"] = user
-                        dict_in["date"] = resp.json()["sleep"][0]["dateOfSleep"]
-                        dict_in["efficiency"] = resp.json()["sleep"][0]["efficiency"]
-                        dict_in["deep"] = resp.json()["summary"]["stages"]["deep"]
-                        dict_in["light"] = resp.json()["summary"]["stages"]["light"]
-                        dict_in["rem"] = resp.json()["summary"]["stages"]["rem"]
-                        dict_in["wake"] = resp.json()["summary"]["stages"]["wake"]
-                        dict_in["date_time"] = datetime.now()
-                        slp_list.append(dict_in)
-                    sleep_df = pd.DataFrame(slp_list)
-                    sleep_list.append(sleep_df)
+                if oauth_type == 'google':
+                    # --- NEW GOOGLE HEALTH API SLEEP ADAPTER ---
+                    google_session = _get_google_session(user)
+                    if google_session:
+                        # Use the filter format requested by the user
+                        # startdate and enddate are in YYYY-MM-DD format
+                        url = f"https://health.googleapis.com/v4/users/me/dataTypes/sleep/dataPoints?filter=sleep.interval.end_time >= \"{startdate}T00:00:00Z\" AND sleep.interval.end_time < \"{enddate}T23:59:59Z\"&fields=dataPoints/sleep/interval,dataPoints/sleep/summary"
+                        
+                        resp = google_session.get(url)
+                        log_data = {
+                            "message": f"sleep_date_range_google: {startdate} to {enddate}",
+                            "user_id": user,
+                            "route": "/fitbit_lastsynch_grab"
+                        }
+                        logger.log_struct(log_data, severity="INFO")
+                        
+                        if resp.status_code == 200:
+                            data = resp.json()
+                            data_points = data.get('dataPoints', [])
+                            
+                            slp_list = []
+                            for dp in data_points:
+                                sleep = dp.get('sleep', {})
+                                interval = sleep.get('interval', {})
+                                summary = sleep.get('summary', {})
+                                stages_summary = summary.get('stagesSummary', [])
+                                
+                                # Mapping to 'sync_sleep' table
+                                # sync_sleep schema: id, date, efficiency, deep, light, rem, wake, date_time
+                                start_time_str = interval.get('startTime')
+                                
+                                dict_in = {}
+                                dict_in["id"] = user
+                                dict_in["date"] = start_time_str.split('T')[0] if start_time_str else startdate
+                                
+                                # Efficiency mapping: (minutesAsleep / minutesInSleepPeriod) * 100, rounded up
+                                minutes_asleep = int(summary.get('minutesAsleep', 0))
+                                minutes_in_bed = int(summary.get('minutesInSleepPeriod', 0))
+                                efficiency = 0
+                                if minutes_in_bed > 0:
+                                    efficiency = math.ceil((minutes_asleep / minutes_in_bed) * 100)
+                                dict_in["efficiency"] = efficiency
+                                
+                                # Extract stages from stagesSummary
+                                dict_in["deep"] = sum(int(s.get('minutes', 0)) for s in stages_summary if s.get('type') == 'DEEP')
+                                dict_in["light"] = sum(int(s.get('minutes', 0)) for s in stages_summary if s.get('type') == 'LIGHT')
+                                dict_in["rem"] = sum(int(s.get('minutes', 0)) for s in stages_summary if s.get('type') == 'REM')
+                                dict_in["wake"] = sum(int(s.get('minutes', 0)) for s in stages_summary if s.get('type') == 'AWAKE')
+                                
+                                dict_in["date_time"] = datetime.now()
+                                slp_list.append(dict_in)
+                                
+                            if slp_list:
+                                sleep_list.append(pd.DataFrame(slp_list))
+                        else:
+                            log.error(f"Google Health API error for {user} in sync: {resp.status_code} {resp.reason}")
+
+                else:
+                    for single_date in (datetime.strptime(startdate, '%Y-%m-%d') + timedelta(n) for n in
+                                        range(delta.days)):
+                        resp = fitbit.get(
+                            "/1.2/user/-/sleep/date/"
+                            + single_date.strftime('%Y-%m-%d')
+                            + ".json"
+                        )
+                        slp_list = []
+                        log_data = {
+                            "message": f"sleep_date: {single_date.strftime('%Y-%m-%d')}",
+                            "user_id": user,
+                            "route": "/fitbit_lastsynch_grab"
+                        }
+                        logger.log_struct(log_data, severity="INFO")
+                        log_data = {
+                            "message": f"{resp.url}: {resp.status_code} [{resp.reason}]",
+                            "user_id": user,
+                            "route": "/fitbit_lastsynch_grab"
+                        }
+                        logger.log_struct(log_data, severity="INFO")
+                        if resp.json()["summary"].get("stages"):
+                            print(resp.json()["summary"])
+                            dict_in = {}
+                            dict_in["id"] = user
+                            dict_in["date"] = resp.json()["sleep"][0]["dateOfSleep"]
+                            dict_in["efficiency"] = resp.json()["sleep"][0]["efficiency"]
+                            dict_in["deep"] = resp.json()["summary"]["stages"]["deep"]
+                            dict_in["light"] = resp.json()["summary"]["stages"]["light"]
+                            dict_in["rem"] = resp.json()["summary"]["stages"]["rem"]
+                            dict_in["wake"] = resp.json()["summary"]["stages"]["wake"]
+                            dict_in["date_time"] = datetime.now()
+                            slp_list.append(dict_in)
+                        sleep_df = pd.DataFrame(slp_list)
+                        sleep_list.append(sleep_df)
         except (Exception) as e:
             log_data = {
                 "message": f"exception occured: {str(e)}",

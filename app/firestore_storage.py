@@ -83,7 +83,21 @@ class FirestoreStorage(BaseStorage):
     def set(self, blueprint, token):
 
         if self.user:
+            token['oauth_type'] = token.get('oauth_type', 'fitbit')
             self.collection.document(self.user).set(token)
+
+    def save_google_token(self, user, token):
+        if user:
+            token['oauth_type'] = 'google'
+            self.collection.document(user).set(token)
+
+    def get_oauth_type(self, user):
+        doc_ref = self.collection.document(user)
+        doc = doc_ref.get()
+        if doc.exists:
+            data = doc.to_dict()
+            return data.get('oauth_type', 'fitbit')
+        return 'fitbit'
 
     def delete(self, blueprint):
         if self.user:
