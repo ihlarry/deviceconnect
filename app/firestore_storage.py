@@ -69,27 +69,39 @@ class FirestoreStorage(BaseStorage):
         self.collection = db.collection(collection)
         self.user = None
 
-    def get(self, blueprint):
-
+    def get(self, blueprint=None):
+        """Retrieve the token for the user.
+        
+        Handles both the new nested format (fitbit_token, google_token) 
+        and the legacy flat format.
+        """
         if self.user:
             doc_ref = self.collection.document(self.user)
             doc = doc_ref.get()
 
             if doc.exists:
-                return dict(doc.to_dict())
+                data = dict(doc.to_dict())
+                # If fitbit_token exists, return it as the primary token for this storage
+                if 'fitbit_token' in data:
+                    return data['fitbit_token']
+                # Fallback for legacy records that are flat
+                return data
 
         return {}
 
     def set(self, blueprint, token):
-
         if self.user:
+            # Save into nested field to allow for side-by-side with Google Health tokens
             token['oauth_type'] = token.get('oauth_type', 'fitbit')
-            self.collection.document(self.user).set(token)
+            data = {'fitbit_token': token, 'oauth_type': 'fitbit'}
+            self.collection.document(self.user).set(data, merge=True)
 
     def save_google_token(self, user, token):
         if user:
+            # Save into nested field to allow for side-by-side with Fitbit tokens
             token['oauth_type'] = 'google'
-            self.collection.document(user).set(token)
+            data = {'google_token': token, 'oauth_type': 'google'}
+            self.collection.document(user).set(data, merge=True)
 
     def get_oauth_type(self, user):
         doc_ref = self.collection.document(user)
@@ -99,6 +111,11 @@ class FirestoreStorage(BaseStorage):
             return data.get('oauth_type', 'fitbit')
         return 'fitbit'
 
+    def set_oauth_type(self, user, oauth_type):
+        """Programmatically switch the ingestion mode for a user."""
+        if user:
+            self.collection.document(user).set({'oauth_type': oauth_type}, merge=True)
+
     def delete(self, blueprint):
         if self.user:
             self.collection.document(self.user).delete()
@@ -107,5 +124,7 @@ class FirestoreStorage(BaseStorage):
         return [doc.id for doc in self.collection.stream()]
 
     def save(self, user, token):
+        """Legacy or generic save method, now defaults to fitbit nesting."""
         if user:
-            self.collection.document(user).set(token)
+            data = {'fitbit_token': token}
+            self.collection.document(user).set(data, merge=True)

@@ -90,12 +90,14 @@ def oauth2callback():
     credentials = flow.credentials
     
     # Structure token dictionary to mirror legacy expectations
+    # Include credentials.scopes as a space-separated string
     token_dict = {
         'access_token': credentials.token,
         'refresh_token': credentials.refresh_token,
         'token_type': 'Bearer',
         'expires_in': (credentials.expiry - datetime.utcnow()).total_seconds() if credentials.expiry else 3600,
-        'expires_at': credentials.expiry.timestamp() if credentials.expiry else None
+        'expires_at': credentials.expiry.timestamp() if credentials.expiry else None,
+        'scope': ' '.join(credentials.scopes) if credentials.scopes else ''
     }
     
     username = user["email"]

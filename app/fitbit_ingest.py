@@ -71,7 +71,7 @@ import logging
 
 import pandas as pd
 import pandas_gbq
-from flask import Blueprint, request
+from flask import Blueprint, request, session
 from flask_dance.contrib.fitbit import fitbit
 from authlib.integrations.flask_client import OAuth
 from skimpy import clean_columns
@@ -178,17 +178,30 @@ def _date_pulled():
 
 def _get_google_session(user_email):
     """Retrieve an authorized Google session for the given user"""
-    # Assuming the storage is using FirestoreStorage which handles users
     fitbit_bp.storage.user = user_email
-    token = fitbit_bp.storage.get(fitbit_bp)
+    
+    # storage.get() is now "smart" and returns the fitbit_token or flat data 
+    # if it's a legacy record.
+    # However, for Google ingestion, we specifically need the google_token.
+    # We must access the raw Firestore data to get the distinct google_token field.
+    from .firestore_storage import db
+    doc = fitbit_bp.storage.collection.document(user_email).get()
+    if not doc.exists:
+        return None
+    
+    data = doc.to_dict()
+    token = data.get('google_token')
+    
+    # If not in nested format, check the flat root (for transitional support)
+    if not token and data.get('oauth_type') == 'google':
+        token = data
 
-    if not token or token.get('oauth_type') != 'google':
+    if not token:
         return None
 
     client_id = os.environ.get("GOOGLE_HEALTH_CLIENT_ID")
     client_secret = os.environ.get("GOOGLE_HEALTH_CLIENT_SECRET")
 
-    # Fallback to general openid credentials if specific ones aren't set
     if not client_id or not client_secret:
         client_id = os.environ.get("OPENID_AUTH_CLIENT_ID")
         client_secret = os.environ.get("OPENID_AUTH_CLIENT_SECRET")
@@ -198,11 +211,30 @@ def _get_google_session(user_email):
         refresh_token=token.get('refresh_token'),
         token_uri="https://oauth2.googleapis.com/token",
         client_id=client_id,
-        client_secret=client_secret
+        client_secret=client_secret,
+        scopes=token.get('scope', '').split(' ') if token.get('scope') else None
     )
 
-    # AuthorizedSession will handle refreshing the token when it's used
     return AuthorizedSession(creds)
+
+
+@bp.route("/fitbit_admin_switch_auth")
+def admin_switch_auth():
+    """Securely toggle the authentication mode for the logged-in user."""
+    user = session.get("user")
+    if not user:
+        return "Unauthorized: Please login first via the splash page.", 401
+    
+    email = user["email"]
+    target_type = request.args.get("type")
+    
+    if target_type not in ['google', 'fitbit']:
+        return f"Invalid type '{target_type}'. Must be 'google' or 'fitbit'.", 400
+    
+    fitbit_bp.storage.set_oauth_type(email, target_type)
+    
+    log.info("User %s switched to %s mode", email, target_type)
+    return f"Successfully switched authentication mode to: <b>{target_type}</b> for {email}. You can now return to the dashboard."
 
 
 #

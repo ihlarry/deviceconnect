@@ -44,6 +44,7 @@ from .fitbit_auth import bp as fitbit_auth_bp, fitbit_bp
 from .frontend import bp as frontend_bp
 from .fitbit_ingest import bp as fitbit_ingest_bp
 from .fitbit_scheduled_queries import bp as fitbit_query_bp
+from .google_health_auth import bp as google_health_auth_bp
 
 
 #
@@ -65,6 +66,7 @@ if not os.environ.get("FRONTEND_ONLY"):
 if not os.environ.get("BACKEND_ONLY"):
     app.register_blueprint(frontend_bp)
 app.register_blueprint(fitbit_query_bp)
+app.register_blueprint(google_health_auth_bp)
 
 #
 # configure logging
@@ -98,11 +100,24 @@ def index():
     if fitbit_bp.session.token:
         del fitbit_bp.session.token
 
+    oauth_type = fitbit_bp.storage.get_oauth_type(user["email"])
+    
+    # Check if google token exists
+    from .firestore_storage import db
+    doc = fitbit_bp.storage.collection.document(user["email"]).get()
+    has_google = False
+    if doc.exists:
+        data = doc.to_dict()
+        if 'google_token' in data or data.get('oauth_type') == 'google':
+            has_google = True
+
     return render_template(
         "home.html",
         user=user,
         app_name=request.host_url,
         is_fitbit_registered=fitbit.authorized,
+        is_google_registered=has_google,
+        oauth_type=oauth_type
     )
 
 
