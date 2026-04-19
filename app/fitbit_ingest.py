@@ -277,9 +277,11 @@ def google_health_heart_ingest():
             yesterday = date.today() - timedelta(days=1)
             
             if last_date_stored:
-                start_date = last_date_stored + timedelta(days=1)
-                log.info("%s: Last stored date was %s. New start_date is %s", email, last_date_stored, start_date)
+                # Rolling Window: Look back 3 days from the last known record to handle delayed syncs
+                start_date = last_date_stored - timedelta(days=3)
+                log.info("%s: Last stored date was %s. Using 3-day rolling overlap. New start_date is %s", email, last_date_stored, start_date)
             else:
+                # Initial run depth: 7 days ago
                 start_date = date.today() - timedelta(days=7)
                 log.info("%s: No previous data found for %s. Using 7-day lookback: %s", email, table_name, start_date)
                 
@@ -288,62 +290,115 @@ def google_health_heart_ingest():
                 results.append(f"{email}: Up to date")
                 continue
 
-            # 3. Fetch Data from Google Health
+            # 3. Obtain Session
             session_gh = _get_google_session(email)
             if not session_gh:
                 log.error("%s: FAILED to obtain Google session.", email)
                 results.append(f"{email}: Session fail")
                 continue
-                
-            payload = _build_google_rollup_payload(start_date, yesterday)
-            url = "https://health.googleapis.com/v4/users/me/dataTypes/heart-rate/dataPoints:dailyRollUp"
-            
-            log.info("%s: Sending POST to %s with payload range %s to %s", email, url, start_date, yesterday)
-            resp = session_gh.post(url, json=payload)
-            log.info("%s: API Response: %d [%s]", email, resp.status_code, resp.reason)
-            
-            if resp.status_code != 200:
-                log.error("%s: API error: %s", email, resp.text)
-                results.append(f"{email}: API Error {resp.status_code}")
-                continue
-                
-            data = resp.json()
-            rollup_points = data.get('rollupDataPoints', [])
-            
-            if not rollup_points:
-                log.info("%s: No rollupDataPoints returned by Google for this range.", email)
-                results.append(f"{email}: No data found")
-                continue
 
-            # 4. Map to DataFrame
-            rows = []
+            # --- FETCH 1: Heart Rate Rollup (Avg/Min/Max) ---
+            payload = _build_google_rollup_payload(start_date, yesterday)
+            url_rollup = "https://health.googleapis.com/v4/users/me/dataTypes/heart-rate/dataPoints:dailyRollUp"
+            
+            log.info("%s: Fetching HR Rollup from %s", email, start_date)
+            resp_rollup = session_gh.post(url_rollup, json=payload)
+            if resp_rollup.status_code != 200:
+                log.error("%s: Rollup API error: %s", email, resp_rollup.text)
+                results.append(f"{email}: Rollup Error {resp_rollup.status_code}")
+                continue
+                
+            rollup_points = resp_rollup.json().get('rollupDataPoints', [])
+            hr_rows = []
             for pt in rollup_points:
                 s_date = pt['civilStartTime']['date']
                 hr = pt.get('heartRate', {})
-                
-                rows.append({
+                hr_rows.append({
                     'id': email,
                     'date': date(s_date['year'], s_date['month'], s_date['day']),
                     'bpm_avg': hr.get('beatsPerMinuteAvg'),
                     'bpm_max': hr.get('beatsPerMinuteMax'),
-                    'bpm_min': hr.get('beatsPerMinuteMin'),
-                    'date_pulled': datetime.utcnow()
+                    'bpm_min': hr.get('beatsPerMinuteMin')
                 })
+            df_hr = pd.DataFrame(hr_rows)
+
+            # --- FETCH 2: Resting Heart Rate (Reconcile) ---
+            # Date filter is inclusive-exclusive, so we add 1 day to 'yesterday' for the upper bound
+            end_date_str = (yesterday + timedelta(days=1)).strftime("%Y-%m-%d")
+            filter_resting = f'daily_resting_heart_rate.date >= "{start_date.strftime("%Y-%m-%d")}" AND daily_resting_heart_rate.date < "{end_date_str}"'
+            url_resting = f"https://health.googleapis.com/v4/users/me/dataTypes/daily-resting-heart-rate/dataPoints:reconcile?filter={filter_resting}"
             
-            df = pd.DataFrame(rows)
-            # Fix for ArrowTypeError: Convert date objects to datetime64[ns]
-            if not df.empty:
-                df['date'] = pd.to_datetime(df['date'])
-                df['date_pulled'] = pd.to_datetime(df['date_pulled'])
+            log.info("%s: Fetching Resting HR", email)
+            resp_resting = session_gh.get(url_resting)
+            resting_rows = []
+            if resp_resting.status_code == 200:
+                for pt in resp_resting.json().get('dataPoints', []):
+                    r_data = pt.get('dailyRestingHeartRate', {})
+                    r_date = r_data.get('date', {})
+                    bpm = r_data.get('beatsPerMinute')
+                    resting_rows.append({
+                        'id': email,
+                        'date': date(r_date['year'], r_date['month'], r_date['day']),
+                        'bpm_resting': int(bpm) if bpm else None
+                    })
+            df_resting = pd.DataFrame(resting_rows)
+
+            # --- FETCH 3: Heart Rate Variability (Reconcile) ---
+            filter_hrv = f'daily_heart_rate_variability.date >= "{start_date.strftime("%Y-%m-%d")}" AND daily_heart_rate_variability.date < "{end_date_str}"'
+            url_hrv = f"https://health.googleapis.com/v4/users/me/dataTypes/daily-heart-rate-variability/dataPoints:reconcile?filter={filter_hrv}"
             
-            log.info("%s: Prepared DataFrame with %d rows for BigQuery.", email, len(df))
+            log.info("%s: Fetching HRV", email)
+            resp_hrv = session_gh.get(url_hrv)
+            hrv_rows = []
+            if resp_hrv.status_code == 200:
+                for pt in resp_hrv.json().get('dataPoints', []):
+                    v_data = pt.get('dailyHeartRateVariability', {})
+                    v_date = v_data.get('date', {})
+                    non_rem = v_data.get('nonRemHeartRateBeatsPerMinute')
+                    hrv_rows.append({
+                        'id': email,
+                        'date': date(v_date['year'], v_date['month'], v_date['day']),
+                        'hrv_avg_ms': v_data.get('averageHeartRateVariabilityMilliseconds'),
+                        'hrv_non_rem_bpm': int(non_rem) if non_rem else None,
+                        'hrv_entropy': v_data.get('entropy'),
+                        'hrv_deep_rmssd_ms': v_data.get('deepSleepRootMeanSquareOfSuccessiveDifferencesMilliseconds')
+                    })
+            df_hrv = pd.DataFrame(hrv_rows)
+
+            # --- MERGE & UPLOAD ---
+            if df_hr.empty:
+                log.info("%s: No base heart rate data found, skipping upload.", email)
+                results.append(f"{email}: No data found")
+                continue
+
+            # Left join resting HR and HRV into the main HR dataframe
+            df_final = df_hr.merge(df_resting, on=['id', 'date'], how='left')
+            df_final = df_final.merge(df_hrv, on=['id', 'date'], how='left')
             
-            # 5. Upload to BigQuery
+            # Audit field
+            df_final['date_pulled'] = datetime.utcnow()
+            
+            # Fix types for BigQuery/Arrow
+            df_final['date'] = pd.to_datetime(df_final['date'])
+            df_final['date_pulled'] = pd.to_datetime(df_final['date_pulled'])
+            
+            # PRE-UPLOAD CLEANUP: Implement Self-Healing by deleting the same window before re-inserting
             bq_table_id = f"{dataset_id}.{table_name}"
-            log.info("%s: Attempting to upload to BigQuery: %s", email, bq_table_id)
-            
+            delete_sql = f"""
+                DELETE FROM `{client.project}.{bq_table_id}`
+                WHERE id = '{email}' 
+                AND date >= '{start_date.strftime("%Y-%m-%d")}'
+                AND date <= '{yesterday.strftime("%Y-%m-%d")}'
+            """
+            try:
+                log.info("%s: Removing overlapping days for self-healing: %s to %s", email, start_date, yesterday)
+                client.query(delete_sql).result()
+            except Exception as bq_err:
+                log.warning("%s: Cleanup query failed (Table likely doesn't exist yet): %s", email, str(bq_err))
+
+            log.info("%s: Uploading unified DataFrame with %d rows to %s", email, len(df_final), bq_table_id)
             pandas_gbq.to_gbq(
-                df,
+                df_final,
                 bq_table_id,
                 project_id=client.project,
                 if_exists="append",
@@ -353,12 +408,17 @@ def google_health_heart_ingest():
                     {'name': 'bpm_avg', 'type': 'FLOAT'},
                     {'name': 'bpm_max', 'type': 'FLOAT'},
                     {'name': 'bpm_min', 'type': 'FLOAT'},
+                    {'name': 'bpm_resting', 'type': 'INTEGER'},
+                    {'name': 'hrv_avg_ms', 'type': 'FLOAT'},
+                    {'name': 'hrv_non_rem_bpm', 'type': 'INTEGER'},
+                    {'name': 'hrv_entropy', 'type': 'FLOAT'},
+                    {'name': 'hrv_deep_rmssd_ms', 'type': 'FLOAT'},
                     {'name': 'date_pulled', 'type': 'TIMESTAMP'}
                 ]
             )
             
             log.info("%s: SUCCESSFUL UPLOAD to %s", email, bq_table_id)
-            results.append(f"{email}: Ingested {len(rows)} days")
+            results.append(f"{email}: Ingested {len(df_final)} days")
 
         except Exception as e:
             log.exception("Exception processing %s for heart ingest", email)
