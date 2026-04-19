@@ -331,6 +331,11 @@ def google_health_heart_ingest():
                 })
             
             df = pd.DataFrame(rows)
+            # Fix for ArrowTypeError: Convert date objects to datetime64[ns]
+            if not df.empty:
+                df['date'] = pd.to_datetime(df['date'])
+                df['date_pulled'] = pd.to_datetime(df['date_pulled'])
+            
             log.info("%s: Prepared DataFrame with %d rows for BigQuery.", email, len(df))
             
             # 5. Upload to BigQuery
