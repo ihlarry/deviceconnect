@@ -265,9 +265,10 @@ def google_health_heart_ingest():
             # 1. Skip non-Google users
             oauth_type = fitbit_bp.storage.get_oauth_type(email)
             if oauth_type != 'google':
+                log.info("Skipping %s: oauth_type is %s", email, oauth_type)
                 continue
                 
-            log.info("Processing Google Heart Ingest for %s", email)
+            log.info("FOUND GOOGLE USER: Checking Heart Ingest for %s", email)
             
             # 2. Determine Gap Range
             fpoint = fitbit_data(email)
@@ -276,33 +277,33 @@ def google_health_heart_ingest():
             yesterday = date.today() - timedelta(days=1)
             
             if last_date_stored:
-                # If we have data, start from the day after the last record
                 start_date = last_date_stored + timedelta(days=1)
+                log.info("%s: Last stored date was %s. New start_date is %s", email, last_date_stored, start_date)
             else:
-                # Initial run depth: 7 days ago
                 start_date = date.today() - timedelta(days=7)
+                log.info("%s: No previous data found for %s. Using 7-day lookback: %s", email, table_name, start_date)
                 
-            # If we are already caught up, skip
             if start_date > yesterday:
-                log.info("%s is already caught up (Last date: %s)", email, last_date_stored)
-                results.append(f"{email}: Already up to date")
+                log.info("%s: already caught up. (start_date %s > yesterday %s)", email, start_date, yesterday)
+                results.append(f"{email}: Up to date")
                 continue
 
             # 3. Fetch Data from Google Health
             session_gh = _get_google_session(email)
             if not session_gh:
-                log.error("Could not obtain Google session for %s", email)
+                log.error("%s: FAILED to obtain Google session.", email)
                 results.append(f"{email}: Session fail")
                 continue
                 
             payload = _build_google_rollup_payload(start_date, yesterday)
             url = "https://health.googleapis.com/v4/users/me/dataTypes/heart-rate/dataPoints:dailyRollUp"
             
+            log.info("%s: Sending POST to %s with payload range %s to %s", email, url, start_date, yesterday)
             resp = session_gh.post(url, json=payload)
-            log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
+            log.info("%s: API Response: %d [%s]", email, resp.status_code, resp.reason)
             
             if resp.status_code != 200:
-                log.error("API error for %s: %s", email, resp.text)
+                log.error("%s: API error: %s", email, resp.text)
                 results.append(f"{email}: API Error {resp.status_code}")
                 continue
                 
@@ -310,14 +311,13 @@ def google_health_heart_ingest():
             rollup_points = data.get('rollupDataPoints', [])
             
             if not rollup_points:
-                log.info("No heart data points found for %s in range %s to %s", email, start_date, yesterday)
+                log.info("%s: No rollupDataPoints returned by Google for this range.", email)
                 results.append(f"{email}: No data found")
                 continue
 
             # 4. Map to DataFrame
             rows = []
             for pt in rollup_points:
-                # Extract date from civilStartTime
                 s_date = pt['civilStartTime']['date']
                 hr = pt.get('heartRate', {})
                 
@@ -331,15 +331,20 @@ def google_health_heart_ingest():
                 })
             
             df = pd.DataFrame(rows)
+            log.info("%s: Prepared DataFrame with %d rows for BigQuery.", email, len(df))
             
             # 5. Upload to BigQuery
+            bq_table_id = f"{dataset_id}.{table_name}"
+            log.info("%s: Attempting to upload to BigQuery: %s", email, bq_table_id)
+            
             pandas_gbq.to_gbq(
                 df,
-                f"{dataset_id}.{table_name}",
+                bq_table_id,
                 project_id=client.project,
                 if_exists="append"
             )
             
+            log.info("%s: SUCCESSFUL UPLOAD to %s", email, bq_table_id)
             results.append(f"{email}: Ingested {len(rows)} days")
 
         except Exception as e:
@@ -4459,15 +4464,19 @@ class fitbit_data():
             SELECT max(date) as max_date FROM `{client.project}.{bigquery_datasetname}.{table_name}` 
             where id = @id
         """
-        job_config = bigquery.QueryJobConfig(
-            query_parameters=[
-                bigquery.ScalarQueryParameter("id", "STRING", self.email),
-            ]
-        )
-        query_job = client.query(sql, job_config=job_config)
-        results = query_job.result()
-        for row in results:
-            if row.max_date:
-                last_date = row.max_date
+        try:
+            job_config = bigquery.QueryJobConfig(
+                query_parameters=[
+                    bigquery.ScalarQueryParameter("id", "STRING", self.email),
+                ]
+            )
+            query_job = client.query(sql, job_config=job_config)
+            results = query_job.result()
+            for row in results:
+                if row.max_date:
+                    last_date = row.max_date
+        except Exception:
+            # If table doesn't exist yet, return None to allow first-run ingest
+            return None
         return last_date
 
