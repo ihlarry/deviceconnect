@@ -346,7 +346,15 @@ def google_health_heart_ingest():
                 df,
                 bq_table_id,
                 project_id=client.project,
-                if_exists="append"
+                if_exists="append",
+                table_schema=[
+                    {'name': 'id', 'type': 'STRING'},
+                    {'name': 'date', 'type': 'DATE'},
+                    {'name': 'bpm_avg', 'type': 'FLOAT'},
+                    {'name': 'bpm_max', 'type': 'FLOAT'},
+                    {'name': 'bpm_min', 'type': 'FLOAT'},
+                    {'name': 'date_pulled', 'type': 'TIMESTAMP'}
+                ]
             )
             
             log.info("%s: SUCCESSFUL UPLOAD to %s", email, bq_table_id)
