@@ -95,9 +95,12 @@ and is wrapped around the whole page content, except for the footer in this exam
             </h4>
             {% else %}
             <button class="registered-btn" id="google_register">Registered</button>
-            <a href="#" style="margin-left: 10px; color: #666; font-size: 0.9em; text-decoration: none;">(To unregister, revoke access in your Google Account)</a>
+            <a id="google_health_update" style="margin-left: 10px; color: #170f5f; font-weight: bold; text-decoration: underline;" href={{
+              url_for('google_health_auth_bp.google_health_registration') }}>Update Permissions</a>
+            <br>
+            <a href="#" style="color: #666; font-size: 0.9em; text-decoration: none;">(To unregister, revoke access in your Google Account)</a>
             {% if oauth_type == 'google' %}
-              <span class="w3-tag w3-green w3-round w3-margin-left">Active Ingestion</span>
+              <span class="w3-tag w3-green w3-round w3-margin-top">Active Ingestion</span>
             {% endif %}
             {% endif %}
           </div>
