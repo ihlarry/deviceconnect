@@ -218,6 +218,139 @@ def _get_google_session(user_email):
     return AuthorizedSession(creds)
 
 
+def _build_google_rollup_payload(start_date, end_date):
+    """
+    Constructs the detailed JSON payload for Google Health dailyRollUp.
+    Handles the nested date/time structure.
+    """
+    return {
+        "range": {
+            "start": {
+                "date": {
+                    "year": start_date.year,
+                    "month": start_date.month,
+                    "day": start_date.day
+                },
+                "time": {"hours": 0, "minutes": 0, "seconds": 0, "nanos": 0}
+            },
+            "end": {
+                "date": {
+                    "year": end_date.year,
+                    "month": end_date.month,
+                    "day": end_date.day
+                },
+                "time": {"hours": 23, "minutes": 59, "seconds": 59, "nanos": 0}
+            }
+        },
+        "windowSizeDays": 1
+    }
+
+
+@bp.route("/google_health_heart_ingest")
+def google_health_heart_ingest():
+    """
+    Ingests heart rate data using Google Health dailyRollUp API.
+    Calculates gaps based on BigQuery 'ghealth_heart_daily' max(date).
+    Initial depth of 7 days for users with no records.
+    """
+    start_timer = timeit.default_timer()
+    user_list = fitbit_bp.storage.all_users()
+    dataset_id = bigquery_datasetname
+    table_name = "ghealth_heart_daily"
+    
+    results = []
+    
+    for email in user_list:
+        try:
+            # 1. Skip non-Google users
+            oauth_type = fitbit_bp.storage.get_oauth_type(email)
+            if oauth_type != 'google':
+                continue
+                
+            log.info("Processing Google Heart Ingest for %s", email)
+            
+            # 2. Determine Gap Range
+            fpoint = fitbit_data(email)
+            last_date_stored = fpoint.get_google_last_date(table_name)
+            
+            yesterday = date.today() - timedelta(days=1)
+            
+            if last_date_stored:
+                # If we have data, start from the day after the last record
+                start_date = last_date_stored + timedelta(days=1)
+            else:
+                # Initial run depth: 7 days ago
+                start_date = date.today() - timedelta(days=7)
+                
+            # If we are already caught up, skip
+            if start_date > yesterday:
+                log.info("%s is already caught up (Last date: %s)", email, last_date_stored)
+                results.append(f"{email}: Already up to date")
+                continue
+
+            # 3. Fetch Data from Google Health
+            session_gh = _get_google_session(email)
+            if not session_gh:
+                log.error("Could not obtain Google session for %s", email)
+                results.append(f"{email}: Session fail")
+                continue
+                
+            payload = _build_google_rollup_payload(start_date, yesterday)
+            url = "https://health.googleapis.com/v4/users/me/dataTypes/heart-rate/dataPoints:dailyRollUp"
+            
+            resp = session_gh.post(url, json=payload)
+            log.debug("%s: %d [%s]", resp.url, resp.status_code, resp.reason)
+            
+            if resp.status_code != 200:
+                log.error("API error for %s: %s", email, resp.text)
+                results.append(f"{email}: API Error {resp.status_code}")
+                continue
+                
+            data = resp.json()
+            rollup_points = data.get('rollupDataPoints', [])
+            
+            if not rollup_points:
+                log.info("No heart data points found for %s in range %s to %s", email, start_date, yesterday)
+                results.append(f"{email}: No data found")
+                continue
+
+            # 4. Map to DataFrame
+            rows = []
+            for pt in rollup_points:
+                # Extract date from civilStartTime
+                s_date = pt['civilStartTime']['date']
+                hr = pt.get('heartRate', {})
+                
+                rows.append({
+                    'id': email,
+                    'date': date(s_date['year'], s_date['month'], s_date['day']),
+                    'bpm_avg': hr.get('beatsPerMinuteAvg'),
+                    'bpm_max': hr.get('beatsPerMinuteMax'),
+                    'bpm_min': hr.get('beatsPerMinuteMin'),
+                    'date_pulled': datetime.utcnow()
+                })
+            
+            df = pd.DataFrame(rows)
+            
+            # 5. Upload to BigQuery
+            pandas_gbq.to_gbq(
+                df,
+                f"{dataset_id}.{table_name}",
+                project_id=client.project,
+                if_exists="append"
+            )
+            
+            results.append(f"{email}: Ingested {len(rows)} days")
+
+        except Exception as e:
+            log.exception("Exception processing %s for heart ingest", email)
+            results.append(f"{email}: Exception {str(e)}")
+
+    stop_timer = timeit.default_timer()
+    log.info("Google Heart Ingest completed in %f seconds", stop_timer - start_timer)
+    return str(results)
+
+
 @bp.route("/fitbit_admin_switch_auth")
 def admin_switch_auth():
     """Securely toggle the authentication mode for the logged-in user."""
@@ -4304,9 +4437,9 @@ class fitbit_data():
     def get_lastsynch(self):
         last_sync_stored = ""
         print(self.email)
-        sql = """
-            SELECT last_sync_time FROM `pericardits.fitbit.device` 
-            where id = @id and last_sync_time = (select max(last_sync_time) from `pericardits.fitbit.device` where id = @id) LIMIT 1
+        sql = f"""
+            SELECT last_sync_time FROM `{client.project}.{bigquery_datasetname}.device` 
+            where id = @id and last_sync_time = (select max(last_sync_time) from `{client.project}.{bigquery_datasetname}.device` where id = @id) LIMIT 1
         """
         job_config = bigquery.QueryJobConfig(
             query_parameters=[
@@ -4319,4 +4452,22 @@ class fitbit_data():
             print("from get_lastsynch ", row.last_sync_time)
             last_sync_stored = row.last_sync_time
         return last_sync_stored
+
+    def get_google_last_date(self, table_name):
+        last_date = None
+        sql = f"""
+            SELECT max(date) as max_date FROM `{client.project}.{bigquery_datasetname}.{table_name}` 
+            where id = @id
+        """
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("id", "STRING", self.email),
+            ]
+        )
+        query_job = client.query(sql, job_config=job_config)
+        results = query_job.result()
+        for row in results:
+            if row.max_date:
+                last_date = row.max_date
+        return last_date
 
