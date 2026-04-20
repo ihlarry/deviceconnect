@@ -769,6 +769,216 @@ def google_health_movement_ingest():
     return str(results)
 
 
+@bp.route("/google_health_biometrics_ingest")
+def google_health_biometrics_ingest():
+    """
+    Ingests daily biometric data (VO2 Max, SpO2, Resp Rate, Sleep Temp).
+    Uses 3-day rolling window for self-healing and unified Biometrics table.
+    """
+    start_timer = timeit.default_timer()
+    user_list = fitbit_bp.storage.all_users()
+    dataset_id = bigquery_datasetname
+    table_name = "ghealth_biometrics_daily"
+    
+    results = []
+    
+    for email in user_list:
+        try:
+            # 1. Skip non-Google users
+            oauth_type = fitbit_bp.storage.get_oauth_type(email)
+            if oauth_type != 'google':
+                log.info("Skipping %s: oauth_type is %s", email, oauth_type)
+                continue
+                
+            log.info("FOUND GOOGLE USER: Checking Biometrics Ingest for %s", email)
+            
+            # 2. Determine Gap Range
+            fpoint = fitbit_data(email)
+            last_date_stored = fpoint.get_google_last_date(table_name)
+            
+            yesterday = date.today() - timedelta(days=1)
+            
+            if last_date_stored:
+                start_date = last_date_stored - timedelta(days=3)
+                log.info("%s: Last stored date was %s. Using 3-day rolling overlap. New start_date is %s", email, last_date_stored, start_date)
+            else:
+                start_date = date.today() - timedelta(days=7)
+                log.info("%s: No previous data found for %s. Using 7-day lookback: %s", email, table_name, start_date)
+                
+            if start_date > yesterday:
+                log.info("%s: already caught up. (start_date %s > yesterday %s)", email, start_date, yesterday)
+                results.append(f"{email}: Up to date")
+                continue
+
+            # 3. Obtain Session
+            session_gh = _get_google_session(email)
+            if not session_gh:
+                log.error("%s: FAILED to obtain Google session.", email)
+                results.append(f"{email}: Session fail")
+                continue
+
+            # --- FETCH 1: VO2 Max (reconcile) ---
+            # Date filter is inclusive-exclusive
+            end_date_str = (yesterday + timedelta(days=1)).strftime("%Y-%m-%d")
+            filter_vo2 = f'daily_vo2_max.date >= "{start_date.strftime("%Y-%m-%d")}" AND daily_vo2_max.date < "{end_date_str}"'
+            url_vo2 = f"https://health.googleapis.com/v4/users/me/dataTypes/daily-vo2-max/dataPoints:reconcile"
+            
+            log.info("%s: Fetching VO2 Max", email)
+            resp_vo2 = session_gh.get(url_vo2, params={'filter': filter_vo2})
+            
+            vo2_rows = []
+            if resp_vo2.status_code == 200:
+                for pt in resp_vo2.json().get('dataPoints', []):
+                    v_data = pt.get('dailyVo2Max', {})
+                    v_date = v_data.get('date', {})
+                    vo2_rows.append({
+                        'id': email,
+                        'date': date(v_date['year'], v_date['month'], v_date['day']),
+                        'vo2_max': v_data.get('vo2Max'),
+                        'cardio_fitness_level': v_data.get('cardioFitnessLevel'),
+                        'vo2_max_covariance': v_data.get('vo2MaxCovariance')
+                    })
+            df_vo2 = pd.DataFrame(vo2_rows)
+
+            # --- FETCH 2: SpO2 (reconcile) ---
+            filter_spo2 = f'daily_oxygen_saturation.date >= "{start_date.strftime("%Y-%m-%d")}" AND daily_oxygen_saturation.date < "{end_date_str}"'
+            url_spo2 = f"https://health.googleapis.com/v4/users/me/dataTypes/daily-oxygen-saturation/dataPoints:reconcile"
+            
+            log.info("%s: Fetching SpO2", email)
+            resp_spo2 = session_gh.get(url_spo2, params={'filter': filter_spo2})
+            
+            spo2_rows = []
+            if resp_spo2.status_code == 200:
+                for pt in resp_spo2.json().get('dataPoints', []):
+                    s_data = pt.get('dailyOxygenSaturation', {})
+                    s_date = s_data.get('date', {})
+                    spo2_rows.append({
+                        'id': email,
+                        'date': date(s_date['year'], s_date['month'], s_date['day']),
+                        'spo2_avg': s_data.get('averagePercentage'),
+                        'spo2_lower': s_data.get('lowerBoundPercentage'),
+                        'spo2_upper': s_data.get('upperBoundPercentage'),
+                        'spo2_stdev': s_data.get('standardDeviationPercentage')
+                    })
+            df_spo2 = pd.DataFrame(spo2_rows)
+
+            # --- FETCH 3: Respiratory Rate (reconcile) ---
+            filter_resp = f'daily_respiratory_rate.date >= "{start_date.strftime("%Y-%m-%d")}" AND daily_respiratory_rate.date < "{end_date_str}"'
+            url_resp = f"https://health.googleapis.com/v4/users/me/dataTypes/daily-respiratory-rate/dataPoints:reconcile"
+            
+            log.info("%s: Fetching Respiratory Rate", email)
+            resp_rr = session_gh.get(url_resp, params={'filter': filter_resp})
+            
+            resp_rows = []
+            if resp_rr.status_code == 200:
+                for pt in resp_rr.json().get('dataPoints', []):
+                    r_data = pt.get('dailyRespiratoryRate', {})
+                    r_date = r_data.get('date', {})
+                    resp_rows.append({
+                        'id': email,
+                        'date': date(r_date['year'], r_date['month'], r_date['day']),
+                        'respiratory_rate': r_data.get('breathsPerMinute')
+                    })
+            df_resp = pd.DataFrame(resp_rows)
+
+            # --- FETCH 4: Sleep Temp (reconcile) ---
+            filter_temp = f'daily_sleep_temperature_derivations.date >= "{start_date.strftime("%Y-%m-%d")}" AND daily_sleep_temperature_derivations.date < "{end_date_str}"'
+            url_temp = f"https://health.googleapis.com/v4/users/me/dataTypes/daily-sleep-temperature-derivations/dataPoints:reconcile"
+            
+            log.info("%s: Fetching Sleep Temp", email)
+            resp_temp = session_gh.get(url_temp, params={'filter': filter_temp})
+            
+            temp_rows = []
+            if resp_temp.status_code == 200:
+                for pt in resp_temp.json().get('dataPoints', []):
+                    t_data = pt.get('dailySleepTemperatureDerivations', {})
+                    t_date = t_data.get('date', {})
+                    nightly = t_data.get('nightlyTemperatureCelsius')
+                    baseline = t_data.get('baselineTemperatureCelsius')
+                    
+                    delta = None
+                    if nightly is not None and baseline is not None:
+                        delta = nightly - baseline
+                        
+                    temp_rows.append({
+                        'id': email,
+                        'date': date(t_date['year'], t_date['month'], t_date['day']),
+                        'sleep_temp_nightly': nightly,
+                        'sleep_temp_baseline': baseline,
+                        'sleep_temp_delta': delta,
+                        'sleep_temp_stdev': t_data.get('relativeNightlyStddev30dCelsius')
+                    })
+            df_temp = pd.DataFrame(temp_rows)
+
+            # --- PREPARE & MERGE ---
+            if df_vo2.empty and df_spo2.empty and df_resp.empty and df_temp.empty:
+                log.info("%s: No biometric data found for range.", email)
+                results.append(f"{email}: No data")
+                continue
+
+            # Multi-way outer join to capture all available biometric data
+            df_final = df_vo2.merge(df_spo2, on=['id', 'date'], how='outer')
+            df_final = df_final.merge(df_resp, on=['id', 'date'], how='outer')
+            df_final = df_final.merge(df_temp, on=['id', 'date'], how='outer')
+            
+            # Audit field
+            df_final['date_pulled'] = datetime.utcnow()
+            
+            # Fix types for BigQuery/Arrow
+            df_final['date'] = pd.to_datetime(df_final['date'])
+            df_final['date_pulled'] = pd.to_datetime(df_final['date_pulled'])
+            
+            # PRE-UPLOAD CLEANUP (Self-Healing)
+            bq_table_id = f"{dataset_id}.{table_name}"
+            delete_sql = f"""
+                DELETE FROM `{client.project}.{bq_table_id}`
+                WHERE id = '{email}' 
+                AND date >= '{start_date.strftime("%Y-%m-%d")}'
+                AND date <= '{yesterday.strftime("%Y-%m-%d")}'
+            """
+            try:
+                log.info("%s: Removing overlapping days for self-healing: %s to %s", email, start_date, yesterday)
+                client.query(delete_sql).result()
+            except Exception as bq_err:
+                log.warning("%s: Cleanup query failed (Table likely doesn't exist yet): %s", email, str(bq_err))
+
+            log.info("%s: Uploading %d biometric rows to %s", email, len(df_final), bq_table_id)
+            pandas_gbq.to_gbq(
+                df_final,
+                bq_table_id,
+                project_id=client.project,
+                if_exists="append",
+                table_schema=[
+                    {'name': 'id', 'type': 'STRING'},
+                    {'name': 'date', 'type': 'DATE'},
+                    {'name': 'vo2_max', 'type': 'FLOAT'},
+                    {'name': 'cardio_fitness_level', 'type': 'STRING'},
+                    {'name': 'vo2_max_covariance', 'type': 'FLOAT'},
+                    {'name': 'spo2_avg', 'type': 'FLOAT'},
+                    {'name': 'spo2_lower', 'type': 'FLOAT'},
+                    {'name': 'spo2_upper', 'type': 'FLOAT'},
+                    {'name': 'spo2_stdev', 'type': 'FLOAT'},
+                    {'name': 'respiratory_rate', 'type': 'FLOAT'},
+                    {'name': 'sleep_temp_nightly', 'type': 'FLOAT'},
+                    {'name': 'sleep_temp_baseline', 'type': 'FLOAT'},
+                    {'name': 'sleep_temp_delta', 'type': 'FLOAT'},
+                    {'name': 'sleep_temp_stdev', 'type': 'FLOAT'},
+                    {'name': 'date_pulled', 'type': 'TIMESTAMP'}
+                ]
+            )
+            
+            log.info("%s: SUCCESSFUL BIOMETRICS UPLOAD to %s", email, bq_table_id)
+            results.append(f"{email}: Ingested {len(df_final)} days")
+
+        except Exception as e:
+            log.exception("Exception processing %s for biometrics ingest", email)
+            results.append(f"{email}: Exception {str(e)}")
+
+    stop_timer = timeit.default_timer()
+    log.info("Google Biometrics Ingest completed in %f seconds", stop_timer - start_timer)
+    return str(results)
+
+
 @bp.route("/fitbit_admin_switch_auth")
 def admin_switch_auth():
     """Securely toggle the authentication mode for the logged-in user."""
