@@ -602,6 +602,173 @@ def google_health_sleep_ingest():
     return str(results)
 
 
+@bp.route("/google_health_movement_ingest")
+def google_health_movement_ingest():
+    """
+    Ingests movement data (starting with Steps) using Google Health dailyRollUp API.
+    Uses 3-day rolling window for self-healing.
+    """
+    start_timer = timeit.default_timer()
+    user_list = fitbit_bp.storage.all_users()
+    dataset_id = bigquery_datasetname
+    table_name = "ghealth_movement_daily"
+    
+    results = []
+    
+    for email in user_list:
+        try:
+            # 1. Skip non-Google users
+            oauth_type = fitbit_bp.storage.get_oauth_type(email)
+            if oauth_type != 'google':
+                log.info("Skipping %s: oauth_type is %s", email, oauth_type)
+                continue
+                
+            log.info("FOUND GOOGLE USER: Checking Movement Ingest for %s", email)
+            
+            # 2. Determine Gap Range
+            fpoint = fitbit_data(email)
+            last_date_stored = fpoint.get_google_last_date(table_name)
+            
+            yesterday = date.today() - timedelta(days=1)
+            
+            if last_date_stored:
+                start_date = last_date_stored - timedelta(days=3)
+                log.info("%s: Last stored date was %s. Using 3-day rolling overlap. New start_date is %s", email, last_date_stored, start_date)
+            else:
+                start_date = date.today() - timedelta(days=7)
+                log.info("%s: No previous data found for %s. Using 7-day lookback: %s", email, table_name, start_date)
+                
+            if start_date > yesterday:
+                log.info("%s: already caught up. (start_date %s > yesterday %s)", email, start_date, yesterday)
+                results.append(f"{email}: Up to date")
+                continue
+
+            # 3. Obtain Session
+            session_gh = _get_google_session(email)
+            if not session_gh:
+                log.error("%s: FAILED to obtain Google session.", email)
+                results.append(f"{email}: Session fail")
+                continue
+
+            # --- FETCH 1: Steps (dailyRollUp) ---
+            payload = _build_google_rollup_payload(start_date, yesterday)
+            url_steps = "https://health.googleapis.com/v4/users/me/dataTypes/steps/dataPoints:dailyRollUp"
+            
+            log.info("%s: Fetching Steps from %s", email, start_date)
+            resp_steps = session_gh.post(url_steps, json=payload)
+            if resp_steps.status_code != 200:
+                log.error("%s: Steps API error: %s", email, resp_steps.text)
+                results.append(f"{email}: Steps Error {resp_steps.status_code}")
+                continue
+                
+            steps_rows = []
+            for pt in resp_steps.json().get('rollupDataPoints', []):
+                s_date = pt['civilStartTime']['date']
+                steps_count = int(pt.get('steps', {}).get('countSum', 0))
+                steps_rows.append({
+                    'id': email,
+                    'date': date(s_date['year'], s_date['month'], s_date['day']),
+                    'steps': steps_count
+                })
+            df_steps = pd.DataFrame(steps_rows)
+
+            # --- FETCH 2: Floors (dailyRollUp) ---
+            url_floors = "https://health.googleapis.com/v4/users/me/dataTypes/floors/dataPoints:dailyRollUp"
+            log.info("%s: Fetching Floors", email)
+            resp_floors = session_gh.post(url_floors, json=payload)
+            
+            floors_rows = []
+            if resp_floors.status_code == 200:
+                for pt in resp_floors.json().get('rollupDataPoints', []):
+                    f_date = pt['civilStartTime']['date']
+                    f_dict = pt.get('floors', {})
+                    f_count = f_dict.get('countSum')
+                    floors_rows.append({
+                        'id': email,
+                        'date': date(f_date['year'], f_date['month'], f_date['day']),
+                        'floors': int(f_count) if f_count is not None else 0
+                    })
+            df_floors = pd.DataFrame(floors_rows)
+
+            # --- FETCH 3: Distance (dailyRollUp) ---
+            url_distance = "https://health.googleapis.com/v4/users/me/dataTypes/distance/dataPoints:dailyRollUp"
+            log.info("%s: Fetching Distance", email)
+            resp_dist = session_gh.post(url_distance, json=payload)
+            
+            dist_rows = []
+            if resp_dist.status_code == 200:
+                for pt in resp_dist.json().get('rollupDataPoints', []):
+                    d_date = pt['civilStartTime']['date']
+                    d_dict = pt.get('distance', {})
+                    mm_sum = d_dict.get('millimetersSum')
+                    # Convert millimeters to meters
+                    meters = float(mm_sum) / 1000.0 if mm_sum is not None else 0.0
+                    dist_rows.append({
+                        'id': email,
+                        'date': date(d_date['year'], d_date['month'], d_date['day']),
+                        'distance_m': meters
+                    })
+            df_dist = pd.DataFrame(dist_rows)
+
+            # --- MERGE & PREPARE ---
+            if df_steps.empty and df_floors.empty and df_dist.empty:
+                log.info("%s: No movement data found for range.", email)
+                results.append(f"{email}: No data")
+                continue
+
+            # Multi-way outer join to ensure we capture any activity logged
+            df_final = df_steps.merge(df_floors, on=['id', 'date'], how='outer')
+            df_final = df_final.merge(df_dist, on=['id', 'date'], how='outer')
+            
+            # Audit field
+            df_final['date_pulled'] = datetime.utcnow()
+            
+            # Fix types for BigQuery/Arrow
+            df_final['date'] = pd.to_datetime(df_final['date'])
+            df_final['date_pulled'] = pd.to_datetime(df_final['date_pulled'])
+            
+            # PRE-UPLOAD CLEANUP (Self-Healing)
+            bq_table_id = f"{dataset_id}.{table_name}"
+            delete_sql = f"""
+                DELETE FROM `{client.project}.{bq_table_id}`
+                WHERE id = '{email}' 
+                AND date >= '{start_date.strftime("%Y-%m-%d")}'
+                AND date <= '{yesterday.strftime("%Y-%m-%d")}'
+            """
+            try:
+                log.info("%s: Removing overlapping days for self-healing: %s to %s", email, start_date, yesterday)
+                client.query(delete_sql).result()
+            except Exception as bq_err:
+                log.warning("%s: Cleanup query failed (Table likely doesn't exist yet): %s", email, str(bq_err))
+
+            log.info("%s: Uploading %d movement rows to %s", email, len(df_final), bq_table_id)
+            pandas_gbq.to_gbq(
+                df_final,
+                bq_table_id,
+                project_id=client.project,
+                if_exists="append",
+                table_schema=[
+                    {'name': 'id', 'type': 'STRING'},
+                    {'name': 'date', 'type': 'DATE'},
+                    {'name': 'steps', 'type': 'INTEGER'},
+                    {'name': 'floors', 'type': 'INTEGER'},
+                    {'name': 'distance_m', 'type': 'FLOAT'},
+                    {'name': 'date_pulled', 'type': 'TIMESTAMP'}
+                ]
+            )
+            
+            log.info("%s: SUCCESSFUL MOVEMENT UPLOAD to %s", email, bq_table_id)
+            results.append(f"{email}: Ingested {len(df_final)} days")
+
+        except Exception as e:
+            log.exception("Exception processing %s for movement ingest", email)
+            results.append(f"{email}: Exception {str(e)}")
+
+    stop_timer = timeit.default_timer()
+    log.info("Google Movement Ingest completed in %f seconds", stop_timer - start_timer)
+    return str(results)
+
+
 @bp.route("/fitbit_admin_switch_auth")
 def admin_switch_auth():
     """Securely toggle the authentication mode for the logged-in user."""
