@@ -93,7 +93,15 @@ class FirestoreStorage(BaseStorage):
         if self.user:
             # Save into nested field to allow for side-by-side with Google Health tokens
             token['oauth_type'] = token.get('oauth_type', 'fitbit')
-            data = {'fitbit_token': token, 'oauth_type': 'fitbit'}
+            data = {'fitbit_token': token}
+            
+            # CRITICAL FIX: Only set the top-level 'oauth_type' if it doesn't exist yet.
+            # This prevents background Fitbit token refreshes from flipping a Google user back to Fitbit mode.
+            doc = self.collection.document(self.user).get()
+            if not doc.exists or 'oauth_type' not in doc.to_dict():
+                log.info("Setting initial oauth_type to 'fitbit' for %s", self.user)
+                data['oauth_type'] = 'fitbit'
+                
             self.collection.document(self.user).set(data, merge=True)
 
     def save_google_token(self, user, token):
