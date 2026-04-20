@@ -429,6 +429,179 @@ def google_health_heart_ingest():
     return str(results)
 
 
+@bp.route("/google_health_sleep_ingest")
+def google_health_sleep_ingest():
+    """
+    Ingests sleep data using Google Health reconcile API.
+    Handles naps by keeping only the longest session per day.
+    Uses 3-day rolling window for self-healing.
+    """
+    start_timer = timeit.default_timer()
+    user_list = fitbit_bp.storage.all_users()
+    dataset_id = bigquery_datasetname
+    table_name = "ghealth_sleep_daily"
+    
+    results = []
+    
+    for email in user_list:
+        try:
+            # 1. Skip non-Google users
+            oauth_type = fitbit_bp.storage.get_oauth_type(email)
+            if oauth_type != 'google':
+                log.info("Skipping %s: oauth_type is %s", email, oauth_type)
+                continue
+                
+            log.info("FOUND GOOGLE USER: Checking Sleep Ingest for %s", email)
+            
+            # 2. Determine Gap Range
+            fpoint = fitbit_data(email)
+            last_date_stored = fpoint.get_google_last_date(table_name)
+            
+            yesterday = date.today() - timedelta(days=1)
+            
+            if last_date_stored:
+                start_date = last_date_stored - timedelta(days=3)
+                log.info("%s: Last stored date was %s. Using 3-day rolling overlap. New start_date is %s", email, last_date_stored, start_date)
+            else:
+                start_date = date.today() - timedelta(days=7)
+                log.info("%s: No previous data found for %s. Using 7-day lookback: %s", email, table_name, start_date)
+                
+            if start_date > yesterday:
+                log.info("%s: already caught up. (start_date %s > yesterday %s)", email, start_date, yesterday)
+                results.append(f"{email}: Up to date")
+                continue
+
+            # 3. Obtain Session
+            session_gh = _get_google_session(email)
+            if not session_gh:
+                log.error("%s: FAILED to obtain Google session.", email)
+                results.append(f"{email}: Session fail")
+                continue
+
+            # --- FETCH: Sleep Data (Reconcile) ---
+            # Date filter is inclusive-exclusive
+            start_iso = start_date.strftime("%Y-%m-%dT00:00:00Z")
+            end_iso = (yesterday + timedelta(days=1)).strftime("%Y-%m-%dT00:00:00Z")
+            
+            url = "https://health.googleapis.com/v4/users/me/dataTypes/sleep/dataPoints:reconcile"
+            filter_str = f'sleep.interval.end_time >= "{start_iso}" AND sleep.interval.end_time < "{end_iso}"'
+            params = {
+                'filter': filter_str,
+                'fields': 'dataPoints(sleep.interval,sleep.summary)'
+            }
+            
+            log.info("%s: Fetching Sleep from %s to %s", email, start_iso, end_iso)
+            resp = session_gh.get(url, params=params)
+            
+            if resp.status_code != 200:
+                log.error("%s: Sleep API error: %s", email, resp.text)
+                results.append(f"{email}: API Error {resp.status_code}")
+                continue
+                
+            points = resp.json().get('dataPoints', [])
+            all_sleep_rows = []
+            
+            for pt in points:
+                sleep = pt.get('sleep', {})
+                interval = sleep.get('interval', {})
+                summary = sleep.get('summary', {})
+                
+                # Use endTime to determine the 'date' of the sleep session
+                end_time_str = interval.get('endTime')
+                if not end_time_str:
+                    continue
+                
+                # Parse "2026-04-13T10:00:30Z"
+                dt_end = datetime.strptime(end_time_str, "%Y-%m-%dT%H:%M:%SZ")
+                session_date = dt_end.date()
+                
+                # Stages Parsing
+                stages = {s['type']: int(s['minutes']) for s in summary.get('stagesSummary', [])}
+                
+                all_sleep_rows.append({
+                    'id': email,
+                    'date': session_date,
+                    'start_time': datetime.strptime(interval.get('startTime'), "%Y-%m-%dT%H:%M:%SZ"),
+                    'end_time': dt_end,
+                    'minutes_in_bed': int(summary.get('minutesInSleepPeriod', 0)),
+                    'minutes_asleep': int(summary.get('minutesAsleep', 0)),
+                    'minutes_awake': int(summary.get('minutesAwake', 0)),
+                    'minutes_to_fall_asleep': int(summary.get('minutesToFallAsleep', 0)),
+                    'minutes_after_wakeup': int(summary.get('minutesAfterWakeUp', 0)),
+                    'minutes_light': stages.get('LIGHT', 0),
+                    'minutes_deep': stages.get('DEEP', 0),
+                    'minutes_rem': stages.get('REM', 0),
+                    'minutes_awake_stage': stages.get('AWAKE', 0)
+                })
+
+            if not all_sleep_rows:
+                log.info("%s: No sleep data found for range.", email)
+                results.append(f"{email}: No data")
+                continue
+
+            # --- NAP HANDLING: Deduplicate by Keeping Longest Session per Date ---
+            df_all = pd.DataFrame(all_sleep_rows)
+            # Sort by duration descending, then keep the first (longest) for each (id, date)
+            df_final = df_all.sort_values(by=['date', 'minutes_in_bed'], ascending=[True, False])
+            df_final = df_final.drop_duplicates(subset=['id', 'date'], keep='first')
+            
+            # Audit field
+            df_final['date_pulled'] = datetime.utcnow()
+            
+            # Fix types for BigQuery/Arrow
+            df_final['date'] = pd.to_datetime(df_final['date'])
+            df_final['date_pulled'] = pd.to_datetime(df_final['date_pulled'])
+            
+            # PRE-UPLOAD CLEANUP (Self-Healing)
+            bq_table_id = f"{dataset_id}.{table_name}"
+            delete_sql = f"""
+                DELETE FROM `{client.project}.{bq_table_id}`
+                WHERE id = '{email}' 
+                AND date >= '{start_date.strftime("%Y-%m-%d")}'
+                AND date <= '{yesterday.strftime("%Y-%m-%d")}'
+            """
+            try:
+                log.info("%s: Removing overlapping days for self-healing: %s to %s", email, start_date, yesterday)
+                client.query(delete_sql).result()
+            except Exception as bq_err:
+                log.warning("%s: Cleanup query failed: %s", email, str(bq_err))
+
+            log.info("%s: Uploading %d sleep sessions to %s", email, len(df_final), bq_table_id)
+            pandas_gbq.to_gbq(
+                df_final,
+                bq_table_id,
+                project_id=client.project,
+                if_exists="append",
+                table_schema=[
+                    {'name': 'id', 'type': 'STRING'},
+                    {'name': 'date', 'type': 'DATE'},
+                    {'name': 'start_time', 'type': 'TIMESTAMP'},
+                    {'name': 'end_time', 'type': 'TIMESTAMP'},
+                    {'name': 'minutes_in_bed', 'type': 'INTEGER'},
+                    {'name': 'minutes_asleep', 'type': 'INTEGER'},
+                    {'name': 'minutes_awake', 'type': 'INTEGER'},
+                    {'name': 'minutes_to_fall_asleep', 'type': 'INTEGER'},
+                    {'name': 'minutes_after_wakeup', 'type': 'INTEGER'},
+                    {'name': 'minutes_light', 'type': 'INTEGER'},
+                    {'name': 'minutes_deep', 'type': 'INTEGER'},
+                    {'name': 'minutes_rem', 'type': 'INTEGER'},
+                    {'name': 'minutes_awake_stage', 'type': 'INTEGER'},
+                    {'name': 'date_pulled', 'type': 'TIMESTAMP'}
+                ]
+            )
+            
+            log.info("%s: SUCCESSFUL SLEEP UPLOAD to %s", email, bq_table_id)
+            results.append(f"{email}: Ingested {len(df_final)} sleep days")
+
+        except Exception as e:
+            log.exception("Exception processing %s for sleep ingest", email)
+            results.append(f"{email}: Exception {str(e)}")
+
+    stop_timer = timeit.default_timer()
+    log.info("Google Sleep Ingest completed in %f seconds", stop_timer - start_timer)
+    return str(results)
+
+
 @bp.route("/fitbit_admin_switch_auth")
 def admin_switch_auth():
     """Securely toggle the authentication mode for the logged-in user."""
