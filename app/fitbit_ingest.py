@@ -1359,7 +1359,162 @@ def google_health_exercise_ingest():
     return str(results)
 
 
+@bp.route("/google_health_heart_intraday_ingest")
+def google_health_heart_intraday_ingest():
+    """
+    Ingests high-frequency heart rate data using Google Health reconcile API.
+    Aggregates raw samples into 1-minute averages locally using Pandas.
+    Uses 3-day rolling window for self-healing.
+    """
+    start_timer = timeit.default_timer()
+    user_list = fitbit_bp.storage.all_users()
+    dataset_id = bigquery_datasetname
+    table_name = "ghealth_heart_intraday"
+    
+    results = []
+    
+    for email in user_list:
+        try:
+            # 1. Skip non-Google users
+            oauth_type = fitbit_bp.storage.get_oauth_type(email)
+            if oauth_type != 'google':
+                log.info("Skipping %s: oauth_type is %s", email, oauth_type)
+                continue
+                
+            log.info("FOUND GOOGLE USER: Checking Heart Intraday Ingest for %s", email)
+            
+            # 2. Determine Gap Range
+            fpoint = fitbit_data(email)
+            last_date_stored = fpoint.get_google_last_date(table_name)
+            
+            yesterday = date.today() - timedelta(days=1)
+            
+            if last_date_stored:
+                start_date = last_date_stored - timedelta(days=2)
+                log.info("%s: Last stored intraday point was %s. Using 2-day rolling overlap. New start_date is %s", email, last_date_stored, start_date)
+            else:
+                start_date = date.today() - timedelta(days=3)
+                log.info("%s: No previous data found. Using 3-day lookback: %s", email, start_date)
+                
+            if start_date > yesterday:
+                log.info("%s: already caught up.", email)
+                results.append(f"{email}: Up to date")
+                continue
+
+            # 3. Obtain Session
+            session_gh = _get_google_session(email)
+            if not session_gh:
+                log.error("%s: FAILED to obtain Google session.", email)
+                results.append(f"{email}: Session fail")
+                continue
+
+            # --- FETCH: Heart Rate Data (Raw Samples) ---
+            # Date filter is inclusive-exclusive
+            start_iso = start_date.strftime("%Y-%m-%dT00:00:00Z")
+            end_iso = (yesterday + timedelta(days=1)).strftime("%Y-%m-%dT00:00:00Z")
+            
+            url = "https://health.googleapis.com/v4/users/me/dataTypes/heart-rate/dataPoints:reconcile"
+            # Using sample_time.physical_time for raw heart rate samples
+            filter_str = f'heart_rate.sample_time.physical_time >= "{start_iso}" AND heart_rate.sample_time.physical_time < "{end_iso}"'
+            
+            all_raw_points = []
+            next_page_token = None
+            
+            log.info("%s: Fetching raw Heart Rate from %s to %s", email, start_iso, end_iso)
+            
+            while True:
+                params = {
+                    'filter': filter_str,
+                    'pageSize': 5000 
+                }
+                if next_page_token:
+                    params['pageToken'] = next_page_token
+                
+                resp = session_gh.get(url, params=params)
+                if resp.status_code != 200:
+                    log.error("%s: Intraday HR API error: %s", email, resp.text)
+                    break
+                    
+                data = resp.json()
+                points = data.get('dataPoints', [])
+                all_raw_points.extend(points)
+                
+                next_page_token = data.get('nextPageToken')
+                if not next_page_token:
+                    break
+                    
+                log.debug("%s: Fetched %d points, moving to next page...", email, len(all_raw_points))
+
+            if not all_raw_points:
+                log.info("%s: No HR samples found for range.", email)
+                results.append(f"{email}: No data")
+                continue
+
+            # 4. Local Aggregation using Pandas
+            rows = []
+            for pt in all_raw_points:
+                hr = pt.get('heartRate', {})
+                sample_time = hr.get('sampleTime', {})
+                ts_str = sample_time.get('physicalTime')
+                if not ts_str: continue
+                rows.append({
+                    'timestamp': datetime.strptime(ts_str, "%Y-%m-%dT%H:%M:%SZ"),
+                    'bpm': int(hr.get('beatsPerMinute', 0))
+                })
+            
+            df_raw = pd.DataFrame(rows)
+            # Resample to 1-minute buckets (mean BPM)
+            df_agg = df_raw.resample('1min', on='timestamp').agg({
+                'bpm': 'mean'
+            }).dropna().reset_index()
+            
+            df_agg.rename(columns={'bpm': 'bpm_avg'}, inplace=True)
+            df_agg['id'] = email
+            df_agg['date_pulled'] = datetime.utcnow()
+            
+            # 5. PRE-UPLOAD CLEANUP (Self-Healing)
+            bq_table_id = f"{dataset_id}.{table_name}"
+            # For intraday, we DELETE based on the timestamp range
+            delete_sql = f"""
+                DELETE FROM `{client.project}.{bq_table_id}`
+                WHERE id = '{email}' 
+                AND timestamp >= '{start_date.strftime("%Y-%m-%d 00:00:00")}'
+                AND timestamp < '{(yesterday + timedelta(days=1)).strftime("%Y-%m-%d 00:00:00")}'
+            """
+            try:
+                log.info("%s: Removing overlapping intraday points: %s to %s", email, start_date, yesterday)
+                client.query(delete_sql).result()
+            except Exception as bq_err:
+                log.warning("%s: Cleanup query failed: %s", email, str(bq_err))
+
+            log.info("%s: Uploading %d aggregated 1-min buckets to %s", email, len(df_agg), bq_table_id)
+            pandas_gbq.to_gbq(
+                df_agg,
+                bq_table_id,
+                project_id=client.project,
+                if_exists="append",
+                table_schema=[
+                    {'name': 'id', 'type': 'STRING'},
+                    {'name': 'timestamp', 'type': 'TIMESTAMP'},
+                    {'name': 'bpm_avg', 'type': 'FLOAT'},
+                    {'name': 'date_pulled', 'type': 'TIMESTAMP'}
+                ]
+            )
+            
+            log.info("%s: SUCCESSFUL INTRADAY HR UPLOAD to %s", email, bq_table_id)
+            results.append(f"{email}: Ingested {len(df_agg)} minutes")
+
+        except Exception as e:
+            log.exception("Exception processing %s for intraday HR ingest", email)
+            results.append(f"{email}: Exception {str(e)}")
+
+    stop_timer = timeit.default_timer()
+    log.info("Google Intraday HR Ingest completed in %f seconds", stop_timer - start_timer)
+    return str(results)
+
+
 @bp.route("/fitbit_admin_switch_auth")
+
 def admin_switch_auth():
     """Securely toggle the authentication mode for the logged-in user."""
     user = session.get("user")
