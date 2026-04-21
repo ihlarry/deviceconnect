@@ -1174,15 +1174,6 @@ def google_health_exertion_ingest():
     log.info("Google Exertion Ingest completed in %f seconds", stop_timer - start_timer)
     return str(results)
 
-        except Exception as e:
-            log.exception("Exception processing %s for exertion ingest", email)
-            results.append(f"{email}: Exception {str(e)}")
-
-    stop_timer = timeit.default_timer()
-    log.info("Google Exertion Ingest completed in %f seconds", stop_timer - start_timer)
-    return str(results)
-
-
 @bp.route("/fitbit_admin_switch_auth")
 def admin_switch_auth():
     """Securely toggle the authentication mode for the logged-in user."""
