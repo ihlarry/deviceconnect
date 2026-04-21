@@ -1174,6 +1174,191 @@ def google_health_exertion_ingest():
     log.info("Google Exertion Ingest completed in %f seconds", stop_timer - start_timer)
     return str(results)
 
+
+@bp.route("/google_health_exercise_ingest")
+def google_health_exercise_ingest():
+    """
+    Ingests exercise/workout sessions using Google Health reconcile API.
+    Handles individual sessions (Walk, Run, etc.) and captures detailed metrics.
+    Uses 3-day rolling window (civil_start_time) for self-healing.
+    """
+    start_timer = timeit.default_timer()
+    user_list = fitbit_bp.storage.all_users()
+    dataset_id = bigquery_datasetname
+    table_name = "ghealth_exercise_sessions"
+    
+    results = []
+    
+    def parse_duration_to_min(duration_str):
+        if not duration_str: return 0.0
+        clean = str(duration_str).rstrip('s')
+        try:
+            return float(clean) / 60.0
+        except:
+            return 0.0
+
+    for email in user_list:
+        try:
+            # 1. Skip non-Google users
+            oauth_type = fitbit_bp.storage.get_oauth_type(email)
+            if oauth_type != 'google':
+                log.info("Skipping %s: oauth_type is %s", email, oauth_type)
+                continue
+                
+            log.info("FOUND GOOGLE USER: Checking Exercise Session Ingest for %s", email)
+            
+            # 2. Determine Gap Range
+            fpoint = fitbit_data(email)
+            last_date_stored = fpoint.get_google_last_date(table_name)
+            
+            yesterday = date.today() - timedelta(days=1)
+            
+            if last_date_stored:
+                start_date = last_date_stored - timedelta(days=3)
+                log.info("%s: Last stored workout was %s. Using 3-day rolling overlap. New start_date is %s", email, last_date_stored, start_date)
+            else:
+                start_date = date.today() - timedelta(days=7)
+                log.info("%s: No previous workout data found. Using 7-day lookback: %s", email, start_date)
+                
+            if start_date > yesterday:
+                log.info("%s: already caught up.", email)
+                results.append(f"{email}: Up to date")
+                continue
+
+            # 3. Obtain Session
+            session_gh = _get_google_session(email)
+            if not session_gh:
+                log.error("%s: FAILED to obtain Google session.", email)
+                results.append(f"{email}: Session fail")
+                continue
+
+            # --- FETCH: Exercise Data (Reconcile) ---
+            # Date filter is inclusive-exclusive
+            start_iso = start_date.strftime("%Y-%m-%d")
+            end_iso = (yesterday + timedelta(days=1)).strftime("%Y-%m-%d")
+            
+            url = "https://health.googleapis.com/v4/users/me/dataTypes/exercise/dataPoints:reconcile"
+            # Using the confirmed working civil_start_time filter
+            filter_str = f'exercise.interval.civil_start_time >= "{start_iso}" AND exercise.interval.civil_start_time < "{end_iso}"'
+            params = {
+                'filter': filter_str
+            }
+            
+            log.info("%s: Fetching workouts from %s to %s", email, start_iso, end_iso)
+            resp = session_gh.get(url, params=params)
+            
+            if resp.status_code != 200:
+                log.error("%s: Exercise API error: %s", email, resp.text)
+                results.append(f"{email}: API Error {resp.status_code}")
+                continue
+                
+            points = resp.json().get('dataPoints', [])
+            all_sessions = []
+            
+            for pt in points:
+                ex = pt.get('exercise', {})
+                interval = ex.get('interval', {})
+                metrics = ex.get('metricsSummary', {})
+                zones = metrics.get('heartRateZoneDurations', {})
+                
+                # Convert startTime to local date for BigQuery 'date' column
+                # e.g. "2026-04-19T02:11:14Z"
+                start_time_str = interval.get('startTime')
+                if not start_time_str:
+                    continue
+                
+                dt_start = datetime.strptime(start_time_str, "%Y-%m-%dT%H:%M:%SZ")
+                session_date = dt_start.date() # Simplified for consistency with other routes
+                
+                all_sessions.append({
+                    'id': email,
+                    'date': session_date,
+                    'session_id': pt.get('dataPointName'),
+                    'exercise_type': ex.get('exerciseType'),
+                    'display_name': ex.get('displayName'),
+                    'start_time': dt_start,
+                    'end_time': datetime.strptime(interval.get('endTime'), "%Y-%m-%dT%H:%M:%SZ"),
+                    'active_duration_min': parse_duration_to_min(ex.get('activeDuration')),
+                    'calories_kcal': metrics.get('caloriesKcal'),
+                    'steps': int(metrics.get('steps', 0)),
+                    'distance_m': float(metrics.get('distanceMillimeters', 0)) / 1000.0,
+                    'avg_heart_rate': int(metrics.get('averageHeartRateBeatsPerMinute', 0)),
+                    'azm_total': int(metrics.get('activeZoneMinutes', 0)),
+                    'hr_zone_light_min': parse_duration_to_min(zones.get('lightTime')),
+                    'hr_zone_moderate_min': parse_duration_to_min(zones.get('moderateTime')),
+                    'hr_zone_vigorous_min': parse_duration_to_min(zones.get('vigorousTime')),
+                    'hr_zone_peak_min': parse_duration_to_min(zones.get('peakTime'))
+                })
+
+            if not all_sessions:
+                log.info("%s: No workouts found for range.", email)
+                results.append(f"{email}: No data")
+                continue
+
+            df_final = pd.DataFrame(all_sessions)
+            df_final['date_pulled'] = datetime.utcnow()
+            
+            # Fix types for BigQuery
+            df_final['date'] = pd.to_datetime(df_final['date'])
+            df_final['start_time'] = pd.to_datetime(df_final['start_time'])
+            df_final['end_time'] = pd.to_datetime(df_final['end_time'])
+            df_final['date_pulled'] = pd.to_datetime(df_final['date_pulled'])
+            
+            # PRE-UPLOAD CLEANUP (Self-Healing)
+            bq_table_id = f"{dataset_id}.{table_name}"
+            # For sessions, we DELETE any session that started in our overlap window
+            delete_sql = f"""
+                DELETE FROM `{client.project}.{bq_table_id}`
+                WHERE id = '{email}' 
+                AND date >= '{start_date.strftime("%Y-%m-%d")}'
+                AND date <= '{yesterday.strftime("%Y-%m-%d")}'
+            """
+            try:
+                log.info("%s: Removing overlapping workouts: %s to %s", email, start_date, yesterday)
+                client.query(delete_sql).result()
+            except Exception as bq_err:
+                log.warning("%s: Cleanup query failed (Table likely doesn't exist yet): %s", email, str(bq_err))
+
+            log.info("%s: Uploading %d workout sessions to %s", email, len(df_final), bq_table_id)
+            pandas_gbq.to_gbq(
+                df_final,
+                bq_table_id,
+                project_id=client.project,
+                if_exists="append",
+                table_schema=[
+                    {'name': 'id', 'type': 'STRING'},
+                    {'name': 'date', 'type': 'DATE'},
+                    {'name': 'session_id', 'type': 'STRING'},
+                    {'name': 'exercise_type', 'type': 'STRING'},
+                    {'name': 'display_name', 'type': 'STRING'},
+                    {'name': 'start_time', 'type': 'TIMESTAMP'},
+                    {'name': 'end_time', 'type': 'TIMESTAMP'},
+                    {'name': 'active_duration_min', 'type': 'FLOAT'},
+                    {'name': 'calories_kcal', 'type': 'FLOAT'},
+                    {'name': 'steps', 'type': 'INTEGER'},
+                    {'name': 'distance_m', 'type': 'FLOAT'},
+                    {'name': 'avg_heart_rate', 'type': 'INTEGER'},
+                    {'name': 'azm_total', 'type': 'INTEGER'},
+                    {'name': 'hr_zone_light_min', 'type': 'FLOAT'},
+                    {'name': 'hr_zone_moderate_min', 'type': 'FLOAT'},
+                    {'name': 'hr_zone_vigorous_min', 'type': 'FLOAT'},
+                    {'name': 'hr_zone_peak_min', 'type': 'FLOAT'},
+                    {'name': 'date_pulled', 'type': 'TIMESTAMP'}
+                ]
+            )
+            
+            log.info("%s: SUCCESSFUL WORKOUT UPLOAD to %s", email, bq_table_id)
+            results.append(f"{email}: Ingested {len(df_final)} sessions")
+
+        except Exception as e:
+            log.exception("Exception processing %s for workout ingest", email)
+            results.append(f"{email}: Exception {str(e)}")
+
+    stop_timer = timeit.default_timer()
+    log.info("Google Exercise Ingest completed in %f seconds", stop_timer - start_timer)
+    return str(results)
+
+
 @bp.route("/fitbit_admin_switch_auth")
 def admin_switch_auth():
     """Securely toggle the authentication mode for the logged-in user."""
