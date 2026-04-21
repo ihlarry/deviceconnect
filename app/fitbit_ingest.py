@@ -979,6 +979,210 @@ def google_health_biometrics_ingest():
     return str(results)
 
 
+@bp.route("/google_health_exertion_ingest")
+def google_health_exertion_ingest():
+    """
+    Ingests physical exertion metrics:
+    - Active Zone Minutes (AZM) - Motivational scoring
+    - Heart Rate Zones - Physiological raw time
+    - Sedentary Period - Inactivity baseline
+    Uses 3-day rolling window for self-healing.
+    """
+    start_timer = timeit.default_timer()
+    user_list = fitbit_bp.storage.all_users()
+    dataset_id = bigquery_datasetname
+    table_name = "ghealth_exertion_daily"
+    
+    results = []
+    
+    def parse_duration_to_min(duration_str):
+        if not duration_str: return 0.0
+        clean = str(duration_str).rstrip('s')
+        try:
+            return float(clean) / 60.0
+        except:
+            return 0.0
+
+    for email in user_list:
+        try:
+            # 1. Skip non-Google users
+            oauth_type = fitbit_bp.storage.get_oauth_type(email)
+            if oauth_type != 'google':
+                log.info("Skipping %s: oauth_type is %s", email, oauth_type)
+                continue
+                
+            log.info("FOUND GOOGLE USER: Checking Exertion Ingest for %s", email)
+            
+            # 2. Determine Gap Range
+            fpoint = fitbit_data(email)
+            last_date_stored = fpoint.get_google_last_date(table_name)
+            
+            yesterday = date.today() - timedelta(days=1)
+            
+            if last_date_stored:
+                start_date = last_date_stored - timedelta(days=3)
+                log.info("%s: Last stored date was %s. Using 3-day rolling overlap. New start_date is %s", email, last_date_stored, start_date)
+            else:
+                start_date = date.today() - timedelta(days=7)
+                log.info("%s: No previous data found for %s. Using 7-day lookback: %s", email, table_name, start_date)
+                
+            if start_date > yesterday:
+                log.info("%s: already caught up. (start_date %s > yesterday %s)", email, start_date, yesterday)
+                results.append(f"{email}: Up to date")
+                continue
+
+            # 3. Obtain Session
+            session_gh = _get_google_session(email)
+            if not session_gh:
+                log.error("%s: FAILED to obtain Google session.", email)
+                results.append(f"{email}: Session fail")
+                continue
+
+            # 4. Prepare Payload
+            payload = {
+                "range": {
+                    "start": {
+                        "date": {"year": start_date.year, "month": start_date.month, "day": start_date.day},
+                        "time": {"hours": 0, "minutes": 0, "seconds": 0, "nanos": 0}
+                    },
+                    "end": {
+                        "date": {"year": yesterday.year, "month": yesterday.month, "day": yesterday.day},
+                        "time": {"hours": 23, "minutes": 59, "seconds": 59, "nanos": 0}
+                    }
+                },
+                "windowSizeDays": 1
+            }
+
+            # --- FETCH 1: Active Zone Minutes (AZM) ---
+            url_azm = "https://health.googleapis.com/v4/users/me/dataTypes/active-zone-minutes/dataPoints:dailyRollUp"
+            log.info("%s: Fetching AZM", email)
+            resp_azm = session_gh.post(url_azm, json=payload)
+            
+            azm_data = {} # (date) -> {fatburn, cardio, peak}
+            if resp_azm.status_code == 200:
+                for pt in resp_azm.json().get('rollupDataPoints', []):
+                    d_obj = pt['civilStartTime']['date']
+                    row_date = date(d_obj['year'], d_obj['month'], d_obj['day'])
+                    
+                    inner = pt.get('activeZoneMinutes', {})
+                    azm_data[row_date] = {
+                        'azm_fat_burn': int(inner.get('sumInFatBurnHeartZone', 0)),
+                        'azm_cardio': int(inner.get('sumInCardioHeartZone', 0)),
+                        'azm_peak': int(inner.get('sumInPeakHeartZone', 0))
+                    }
+
+            # --- FETCH 2: HR Zones ---
+            url_zones = "https://health.googleapis.com/v4/users/me/dataTypes/time-in-heart-rate-zone/dataPoints:dailyRollUp"
+            log.info("%s: Fetching Heart Rate Zones", email)
+            resp_zones = session_gh.post(url_zones, json=payload)
+            
+            zone_data = {} # (date) -> {light, mod, vig, peak}
+            if resp_zones.status_code == 200:
+                for pt in resp_zones.json().get('rollupDataPoints', []):
+                    d_obj = pt['civilStartTime']['date']
+                    row_date = date(d_obj['year'], d_obj['month'], d_obj['day'])
+                    
+                    row_vals = {'hr_zone_light_min': 0.0, 'hr_zone_moderate_min': 0.0, 'hr_zone_vigorous_min': 0.0, 'hr_zone_peak_min': 0.0}
+                    for zone in pt.get('timeInHeartRateZone', {}).get('timeInHeartRateZones', []):
+                        z_name = zone['heartRateZone']
+                        dur_min = parse_duration_to_min(zone.get('duration'))
+                        if z_name == 'LIGHT': row_vals['hr_zone_light_min'] = dur_min
+                        elif z_name == 'MODERATE': row_vals['hr_zone_moderate_min'] = dur_min
+                        elif z_name == 'VIGOROUS': row_vals['hr_zone_vigorous_min'] = dur_min
+                        elif z_name == 'PEAK': row_vals['hr_zone_peak_min'] = dur_min
+                    
+                    zone_data[row_date] = row_vals
+
+            # --- FETCH 3: Sedentary ---
+            url_sedentary = "https://health.googleapis.com/v4/users/me/dataTypes/sedentary-period/dataPoints:dailyRollUp"
+            log.info("%s: Fetching Sedentary Time", email)
+            resp_sedentary = session_gh.post(url_sedentary, json=payload)
+            
+            sedentary_data = {} # (date) -> {sedentary_min}
+            if resp_sedentary.status_code == 200:
+                for pt in resp_sedentary.json().get('rollupDataPoints', []):
+                    d_obj = pt['civilStartTime']['date']
+                    row_date = date(d_obj['year'], d_obj['month'], d_obj['day'])
+                    dur_min = parse_duration_to_min(pt.get('sedentaryPeriod', {}).get('durationSum'))
+                    sedentary_data[row_date] = {'sedentary_min': dur_min}
+
+            # --- CONSOLIDATE ---
+            all_dates = set(azm_data.keys()) | set(zone_data.keys()) | set(sedentary_data.keys())
+            if not all_dates:
+                log.info("%s: No exertion data found for range.", email)
+                results.append(f"{email}: No data")
+                continue
+            
+            final_rows = []
+            for d in all_dates:
+                row = {'id': email, 'date': d}
+                row.update(azm_data.get(d, {'azm_fat_burn': 0, 'azm_cardio': 0, 'azm_peak': 0}))
+                row.update(zone_data.get(d, {'hr_zone_light_min': 0.0, 'hr_zone_moderate_min': 0.0, 'hr_zone_vigorous_min': 0.0, 'hr_zone_peak_min': 0.0}))
+                row.update(sedentary_data.get(d, {'sedentary_min': 0.0}))
+                final_rows.append(row)
+            
+            df_final = pd.DataFrame(final_rows)
+            df_final['date_pulled'] = datetime.utcnow()
+            
+            # Fix types for BigQuery
+            df_final['date'] = pd.to_datetime(df_final['date'])
+            df_final['date_pulled'] = pd.to_datetime(df_final['date_pulled'])
+            
+            # PRE-UPLOAD CLEANUP (Self-Healing)
+            bq_table_id = f"{dataset_id}.{table_name}"
+            delete_sql = f"""
+                DELETE FROM `{client.project}.{bq_table_id}`
+                WHERE id = '{email}' 
+                AND date >= '{start_date.strftime("%Y-%m-%d")}'
+                AND date <= '{yesterday.strftime("%Y-%m-%d")}'
+            """
+            try:
+                log.info("%s: Removing overlapping days for self-healing: %s to %s", email, start_date, yesterday)
+                client.query(delete_sql).result()
+            except Exception as bq_err:
+                log.warning("%s: Cleanup query failed (Table likely doesn't exist yet): %s", email, str(bq_err))
+
+            log.info("%s: Uploading %d exertion rows to %s", email, len(df_final), bq_table_id)
+            pandas_gbq.to_gbq(
+                df_final,
+                bq_table_id,
+                project_id=client.project,
+                if_exists="append",
+                table_schema=[
+                    {'name': 'id', 'type': 'STRING'},
+                    {'name': 'date', 'type': 'DATE'},
+                    {'name': 'azm_fat_burn', 'type': 'INTEGER'},
+                    {'name': 'azm_cardio', 'type': 'INTEGER'},
+                    {'name': 'azm_peak', 'type': 'INTEGER'},
+                    {'name': 'hr_zone_light_min', 'type': 'FLOAT'},
+                    {'name': 'hr_zone_moderate_min', 'type': 'FLOAT'},
+                    {'name': 'hr_zone_vigorous_min', 'type': 'FLOAT'},
+                    {'name': 'hr_zone_peak_min', 'type': 'FLOAT'},
+                    {'name': 'sedentary_min', 'type': 'FLOAT'},
+                    {'name': 'date_pulled', 'type': 'TIMESTAMP'}
+                ]
+            )
+            
+            log.info("%s: SUCCESSFUL EXERTION UPLOAD to %s", email, bq_table_id)
+            results.append(f"{email}: Ingested {len(df_final)} days")
+
+        except Exception as e:
+            log.exception("Exception processing %s for exertion ingest", email)
+            results.append(f"{email}: Exception {str(e)}")
+
+    stop_timer = timeit.default_timer()
+    log.info("Google Exertion Ingest completed in %f seconds", stop_timer - start_timer)
+    return str(results)
+
+        except Exception as e:
+            log.exception("Exception processing %s for exertion ingest", email)
+            results.append(f"{email}: Exception {str(e)}")
+
+    stop_timer = timeit.default_timer()
+    log.info("Google Exertion Ingest completed in %f seconds", stop_timer - start_timer)
+    return str(results)
+
+
 @bp.route("/fitbit_admin_switch_auth")
 def admin_switch_auth():
     """Securely toggle the authentication mode for the logged-in user."""
