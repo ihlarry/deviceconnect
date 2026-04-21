@@ -1456,19 +1456,26 @@ def google_health_heart_intraday_ingest():
                 hr = pt.get('heartRate', {})
                 sample_time = hr.get('sampleTime', {})
                 ts_str = sample_time.get('physicalTime')
+                offset_str = sample_time.get('utcOffset', "0s").rstrip('s') # e.g. "-14400s" -> "-14400"
                 if not ts_str: continue
+                
                 rows.append({
                     'timestamp': datetime.strptime(ts_str, "%Y-%m-%dT%H:%M:%SZ"),
-                    'bpm': int(hr.get('beatsPerMinute', 0))
+                    'bpm': int(hr.get('beatsPerMinute', 0)),
+                    'utc_offset': int(offset_str)
                 })
             
             df_raw = pd.DataFrame(rows)
-            # Resample to 1-minute buckets (mean BPM)
+            # Resample to 1-minute buckets (mean BPM, first offset)
             df_agg = df_raw.resample('1min', on='timestamp').agg({
-                'bpm': 'mean'
+                'bpm': 'mean',
+                'utc_offset': 'first'
             }).dropna().reset_index()
             
-            df_agg.rename(columns={'bpm': 'bpm_avg'}, inplace=True)
+            # Apply Rounding to Integer for BPM
+            df_agg['bpm_avg'] = df_agg['bpm'].round(0).astype(int)
+            df_agg.drop(columns=['bpm'], inplace=True)
+            
             df_agg['id'] = email
             df_agg['date_pulled'] = datetime.utcnow()
             
@@ -1496,7 +1503,8 @@ def google_health_heart_intraday_ingest():
                 table_schema=[
                     {'name': 'id', 'type': 'STRING'},
                     {'name': 'timestamp', 'type': 'TIMESTAMP'},
-                    {'name': 'bpm_avg', 'type': 'FLOAT'},
+                    {'name': 'bpm_avg', 'type': 'INTEGER'},
+                    {'name': 'utc_offset', 'type': 'INTEGER'},
                     {'name': 'date_pulled', 'type': 'TIMESTAMP'}
                 ]
             )
