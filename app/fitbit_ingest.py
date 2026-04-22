@@ -986,6 +986,7 @@ def google_health_exertion_ingest():
     - Active Zone Minutes (AZM) - Motivational scoring
     - Heart Rate Zones - Physiological raw time
     - Sedentary Period - Inactivity baseline
+    - HR Zone Thresholds - Personalized BPM boundaries per day (NEW)
     Uses 3-day rolling window for self-healing.
     """
     start_timer = timeit.default_timer()
@@ -1038,7 +1039,7 @@ def google_health_exertion_ingest():
                 results.append(f"{email}: Session fail")
                 continue
 
-            # 4. Prepare Payload
+            # 4. Prepare Payload for Rollups
             payload = {
                 "range": {
                     "start": {
@@ -1071,9 +1072,9 @@ def google_health_exertion_ingest():
                         'azm_peak': int(inner.get('sumInPeakHeartZone', 0))
                     }
 
-            # --- FETCH 2: HR Zones ---
+            # --- FETCH 2: HR Zones (Durations) ---
             url_zones = "https://health.googleapis.com/v4/users/me/dataTypes/time-in-heart-rate-zone/dataPoints:dailyRollUp"
-            log.info("%s: Fetching Heart Rate Zones", email)
+            log.info("%s: Fetching Heart Rate Zone Durations", email)
             resp_zones = session_gh.post(url_zones, json=payload)
             
             zone_data = {} # (date) -> {light, mod, vig, peak}
@@ -1106,8 +1107,47 @@ def google_health_exertion_ingest():
                     dur_min = parse_duration_to_min(pt.get('sedentaryPeriod', {}).get('durationSum'))
                     sedentary_data[row_date] = {'sedentary_min': dur_min}
 
+            # --- FETCH 4: HR Zone Thresholds (BPM Ranges) ---
+            # Date range: start_date to yesterday
+            f_start = start_date.strftime("%Y-%m-%d")
+            f_end = (yesterday + timedelta(days=1)).strftime("%Y-%m-%d")
+            filter_str = f'daily_heart_rate_zones.date >= "{f_start}" AND daily_heart_rate_zones.date < "{f_end}"'
+            url_thresholds = "https://health.googleapis.com/v4/users/me/dataTypes/daily-heart-rate-zones/dataPoints:reconcile"
+            
+            log.info("%s: Fetching HR Zone Thresholds (BPM)", email)
+            resp_thresholds = session_gh.get(url_thresholds, params={'filter': filter_str})
+            
+            threshold_data = {} # (date) -> {hr_light_min, etc}
+            if resp_thresholds.status_code == 200:
+                for pt in resp_thresholds.json().get('dataPoints', []):
+                    d_obj = pt['dailyHeartRateZones']['date']
+                    row_date = date(d_obj['year'], d_obj['month'], d_obj['day'])
+                    
+                    thresh_vals = {
+                        'hr_light_min': 0, 'hr_light_max': 0,
+                        'hr_mod_min': 0, 'hr_mod_max': 0,
+                        'hr_vig_min': 0, 'hr_vig_max': 0,
+                        'hr_peak_min': 0, 'hr_peak_max': 0
+                    }
+                    
+                    for zone in pt['dailyHeartRateZones'].get('heartRateZones', []):
+                        z_type = zone['heartRateZoneType']
+                        z_min = int(zone.get('minBeatsPerMinute', 0))
+                        z_max = int(zone.get('maxBeatsPerMinute', 0))
+                        
+                        if z_type == 'LIGHT':
+                            thresh_vals['hr_light_min'], thresh_vals['hr_light_max'] = z_min, z_max
+                        elif z_type == 'MODERATE':
+                            thresh_vals['hr_mod_min'], thresh_vals['hr_mod_max'] = z_min, z_max
+                        elif z_type == 'VIGOROUS':
+                            thresh_vals['hr_vig_min'], thresh_vals['hr_vig_max'] = z_min, z_max
+                        elif z_type == 'PEAK':
+                            thresh_vals['hr_peak_min'], thresh_vals['hr_peak_max'] = z_min, z_max
+                    
+                    threshold_data[row_date] = thresh_vals
+
             # --- CONSOLIDATE ---
-            all_dates = set(azm_data.keys()) | set(zone_data.keys()) | set(sedentary_data.keys())
+            all_dates = set(azm_data.keys()) | set(zone_data.keys()) | set(sedentary_data.keys()) | set(threshold_data.keys())
             if not all_dates:
                 log.info("%s: No exertion data found for range.", email)
                 results.append(f"{email}: No data")
@@ -1119,6 +1159,12 @@ def google_health_exertion_ingest():
                 row.update(azm_data.get(d, {'azm_fat_burn': 0, 'azm_cardio': 0, 'azm_peak': 0}))
                 row.update(zone_data.get(d, {'hr_zone_light_min': 0.0, 'hr_zone_moderate_min': 0.0, 'hr_zone_vigorous_min': 0.0, 'hr_zone_peak_min': 0.0}))
                 row.update(sedentary_data.get(d, {'sedentary_min': 0.0}))
+                row.update(threshold_data.get(d, {
+                    'hr_light_min': 0, 'hr_light_max': 0,
+                    'hr_mod_min': 0, 'hr_mod_max': 0,
+                    'hr_vig_min': 0, 'hr_vig_max': 0,
+                    'hr_peak_min': 0, 'hr_peak_max': 0
+                }))
                 final_rows.append(row)
             
             df_final = pd.DataFrame(final_rows)
@@ -1159,6 +1205,14 @@ def google_health_exertion_ingest():
                     {'name': 'hr_zone_vigorous_min', 'type': 'FLOAT'},
                     {'name': 'hr_zone_peak_min', 'type': 'FLOAT'},
                     {'name': 'sedentary_min', 'type': 'FLOAT'},
+                    {'name': 'hr_light_min', 'type': 'INTEGER'},
+                    {'name': 'hr_light_max', 'type': 'INTEGER'},
+                    {'name': 'hr_mod_min', 'type': 'INTEGER'},
+                    {'name': 'hr_mod_max', 'type': 'INTEGER'},
+                    {'name': 'hr_vig_min', 'type': 'INTEGER'},
+                    {'name': 'hr_vig_max', 'type': 'INTEGER'},
+                    {'name': 'hr_peak_min', 'type': 'INTEGER'},
+                    {'name': 'hr_peak_max', 'type': 'INTEGER'},
                     {'name': 'date_pulled', 'type': 'TIMESTAMP'}
                 ]
             )
