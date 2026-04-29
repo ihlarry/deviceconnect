@@ -320,7 +320,7 @@ def google_health_heart_ingest():
                     'bpm_max': hr.get('beatsPerMinuteMax'),
                     'bpm_min': hr.get('beatsPerMinuteMin')
                 })
-            df_hr = pd.DataFrame(hr_rows)
+            df_hr = pd.DataFrame(hr_rows, columns=['id', 'date', 'bpm_avg', 'bpm_max', 'bpm_min'])
 
             # --- FETCH 2: Resting Heart Rate (Reconcile) ---
             # Date filter is inclusive-exclusive, so we add 1 day to 'yesterday' for the upper bound
@@ -341,7 +341,7 @@ def google_health_heart_ingest():
                         'date': date(r_date['year'], r_date['month'], r_date['day']),
                         'bpm_resting': int(bpm) if bpm else None
                     })
-            df_resting = pd.DataFrame(resting_rows)
+            df_resting = pd.DataFrame(resting_rows, columns=['id', 'date', 'bpm_resting'])
 
             # --- FETCH 3: Heart Rate Variability (Reconcile) ---
             filter_hrv = f'daily_heart_rate_variability.date >= "{start_date.strftime("%Y-%m-%d")}" AND daily_heart_rate_variability.date < "{end_date_str}"'
@@ -363,7 +363,7 @@ def google_health_heart_ingest():
                         'hrv_entropy': v_data.get('entropy'),
                         'hrv_deep_rmssd_ms': v_data.get('deepSleepRootMeanSquareOfSuccessiveDifferencesMilliseconds')
                     })
-            df_hrv = pd.DataFrame(hrv_rows)
+            df_hrv = pd.DataFrame(hrv_rows, columns=['id', 'date', 'hrv_avg_ms', 'hrv_non_rem_bpm', 'hrv_entropy', 'hrv_deep_rmssd_ms'])
 
             # --- MERGE & UPLOAD ---
             if df_hr.empty:
@@ -670,7 +670,7 @@ def google_health_movement_ingest():
                     'date': date(s_date['year'], s_date['month'], s_date['day']),
                     'steps': steps_count
                 })
-            df_steps = pd.DataFrame(steps_rows)
+            df_steps = pd.DataFrame(steps_rows, columns=['id', 'date', 'steps'])
 
             # --- FETCH 2: Floors (dailyRollUp) ---
             url_floors = "https://health.googleapis.com/v4/users/me/dataTypes/floors/dataPoints:dailyRollUp"
@@ -688,7 +688,7 @@ def google_health_movement_ingest():
                         'date': date(f_date['year'], f_date['month'], f_date['day']),
                         'floors': int(f_count) if f_count is not None else 0
                     })
-            df_floors = pd.DataFrame(floors_rows)
+            df_floors = pd.DataFrame(floors_rows, columns=['id', 'date', 'floors'])
 
             # --- FETCH 3: Distance (dailyRollUp) ---
             url_distance = "https://health.googleapis.com/v4/users/me/dataTypes/distance/dataPoints:dailyRollUp"
@@ -708,7 +708,7 @@ def google_health_movement_ingest():
                         'date': date(d_date['year'], d_date['month'], d_date['day']),
                         'distance_m': meters
                     })
-            df_dist = pd.DataFrame(dist_rows)
+            df_dist = pd.DataFrame(dist_rows, columns=['id', 'date', 'distance_m'])
 
             # --- MERGE & PREPARE ---
             if df_steps.empty and df_floors.empty and df_dist.empty:
@@ -838,7 +838,7 @@ def google_health_biometrics_ingest():
                         'cardio_fitness_level': v_data.get('cardioFitnessLevel'),
                         'vo2_max_covariance': v_data.get('vo2MaxCovariance')
                     })
-            df_vo2 = pd.DataFrame(vo2_rows)
+            df_vo2 = pd.DataFrame(vo2_rows, columns=['id', 'date', 'vo2_max', 'cardio_fitness_level', 'vo2_max_covariance'])
 
             # --- FETCH 2: SpO2 (reconcile) ---
             filter_spo2 = f'daily_oxygen_saturation.date >= "{start_date.strftime("%Y-%m-%d")}" AND daily_oxygen_saturation.date < "{end_date_str}"'
@@ -860,7 +860,7 @@ def google_health_biometrics_ingest():
                         'spo2_upper': s_data.get('upperBoundPercentage'),
                         'spo2_stdev': s_data.get('standardDeviationPercentage')
                     })
-            df_spo2 = pd.DataFrame(spo2_rows)
+            df_spo2 = pd.DataFrame(spo2_rows, columns=['id', 'date', 'spo2_avg', 'spo2_lower', 'spo2_upper', 'spo2_stdev'])
 
             # --- FETCH 3: Respiratory Rate (reconcile) ---
             filter_resp = f'daily_respiratory_rate.date >= "{start_date.strftime("%Y-%m-%d")}" AND daily_respiratory_rate.date < "{end_date_str}"'
@@ -879,7 +879,7 @@ def google_health_biometrics_ingest():
                         'date': date(r_date['year'], r_date['month'], r_date['day']),
                         'respiratory_rate': r_data.get('breathsPerMinute')
                     })
-            df_resp = pd.DataFrame(resp_rows)
+            df_resp = pd.DataFrame(resp_rows, columns=['id', 'date', 'respiratory_rate'])
 
             # --- FETCH 4: Sleep Temp (reconcile) ---
             filter_temp = f'daily_sleep_temperature_derivations.date >= "{start_date.strftime("%Y-%m-%d")}" AND daily_sleep_temperature_derivations.date < "{end_date_str}"'
@@ -908,7 +908,7 @@ def google_health_biometrics_ingest():
                         'sleep_temp_delta': delta,
                         'sleep_temp_stdev': t_data.get('relativeNightlyStddev30dCelsius')
                     })
-            df_temp = pd.DataFrame(temp_rows)
+            df_temp = pd.DataFrame(temp_rows, columns=['id', 'date', 'sleep_temp_nightly', 'sleep_temp_baseline', 'sleep_temp_delta', 'sleep_temp_stdev'])
 
             # --- PREPARE & MERGE ---
             if df_vo2.empty and df_spo2.empty and df_resp.empty and df_temp.empty:
