@@ -710,8 +710,24 @@ def google_health_movement_ingest():
                     })
             df_dist = pd.DataFrame(dist_rows, columns=['id', 'date', 'distance_m'])
 
+            # --- FETCH 4: Calories (dailyRollUp) ---
+            url_calories = "https://health.googleapis.com/v4/users/me/dataTypes/total-calories/dataPoints:dailyRollUp"
+            log.info("%s: Fetching Calories", email)
+            resp_cal = session_gh.post(url_calories, json=payload)
+            
+            calories_rows = []
+            if resp_cal.status_code == 200:
+                for pt in resp_cal.json().get('rollupDataPoints', []):
+                    c_date = pt['civilStartTime']['date']
+                    calories_rows.append({
+                        'id': email,
+                        'date': date(c_date['year'], c_date['month'], c_date['day']),
+                        'calories_kcal': pt.get('totalCalories', {}).get('kcalSum', 0.0)
+                    })
+            df_calories = pd.DataFrame(calories_rows, columns=['id', 'date', 'calories_kcal'])
+
             # --- MERGE & PREPARE ---
-            if df_steps.empty and df_floors.empty and df_dist.empty:
+            if df_steps.empty and df_floors.empty and df_dist.empty and df_calories.empty:
                 log.info("%s: No movement data found for range.", email)
                 results.append(f"{email}: No data")
                 continue
@@ -719,6 +735,7 @@ def google_health_movement_ingest():
             # Multi-way outer join to ensure we capture any activity logged
             df_final = df_steps.merge(df_floors, on=['id', 'date'], how='outer')
             df_final = df_final.merge(df_dist, on=['id', 'date'], how='outer')
+            df_final = df_final.merge(df_calories, on=['id', 'date'], how='outer')
             
             # Audit field
             df_final['date_pulled'] = datetime.utcnow()
@@ -753,6 +770,7 @@ def google_health_movement_ingest():
                     {'name': 'steps', 'type': 'INTEGER'},
                     {'name': 'floors', 'type': 'INTEGER'},
                     {'name': 'distance_m', 'type': 'FLOAT'},
+                    {'name': 'calories_kcal', 'type': 'FLOAT'},
                     {'name': 'date_pulled', 'type': 'TIMESTAMP'}
                 ]
             )
