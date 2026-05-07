@@ -91,25 +91,37 @@ class FirestoreStorage(BaseStorage):
 
     def set(self, blueprint, token):
         if self.user:
+            doc_ref = self.collection.document(self.user)
+            doc = doc_ref.get()
+            
             # Save into nested field to allow for side-by-side with Google Health tokens
             token['oauth_type'] = token.get('oauth_type', 'fitbit')
             data = {'fitbit_token': token}
             
-            # CRITICAL FIX: Only set the top-level 'oauth_type' if it doesn't exist yet.
-            # This prevents background Fitbit token refreshes from flipping a Google user back to Fitbit mode.
-            doc = self.collection.document(self.user).get()
-            if not doc.exists or 'oauth_type' not in doc.to_dict():
-                log.info("Setting initial oauth_type to 'fitbit' for %s", self.user)
+            # APPROVAL GATE: If this is a BRAND NEW user, set is_active to False
+            if not doc.exists:
+                data['is_active'] = False
+                data['oauth_type'] = 'fitbit'
+            elif 'oauth_type' not in doc.to_dict():
+                # Fix for legacy records missing the oauth_type field
                 data['oauth_type'] = 'fitbit'
                 
-            self.collection.document(self.user).set(data, merge=True)
+            doc_ref.set(data, merge=True)
 
     def save_google_token(self, user, token):
         if user:
+            doc_ref = self.collection.document(user)
+            doc = doc_ref.get()
+
             # Save into nested field to allow for side-by-side with Fitbit tokens
             token['oauth_type'] = 'google'
             data = {'google_token': token, 'oauth_type': 'google'}
-            self.collection.document(user).set(data, merge=True)
+
+            # APPROVAL GATE: If this is a BRAND NEW user, set is_active to False
+            if not doc.exists:
+                data['is_active'] = False
+
+            doc_ref.set(data, merge=True)
 
     def get_oauth_type(self, user):
         doc_ref = self.collection.document(user)
@@ -118,6 +130,21 @@ class FirestoreStorage(BaseStorage):
             data = doc.to_dict()
             return data.get('oauth_type', 'fitbit')
         return 'fitbit'
+
+    def get_active_status(self, user):
+        """Check if ingestion is active for this user. Defaults to True."""
+        doc_ref = self.collection.document(user)
+        doc = doc_ref.get()
+        if doc.exists:
+            data = doc.to_dict()
+            # We default to True so existing patients aren't accidentally skipped
+            return data.get('is_active', True)
+        return False
+
+    def set_active_status(self, user, is_active):
+        """Programmatically activate or deactivate a patient's ingestion."""
+        if user:
+            self.collection.document(user).set({'is_active': is_active}, merge=True)
 
     def set_oauth_type(self, user, oauth_type):
         """Programmatically switch the ingestion mode for a user."""

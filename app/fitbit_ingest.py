@@ -268,6 +268,11 @@ def google_health_heart_ingest():
                 log.info("Skipping %s: oauth_type is %s", email, oauth_type)
                 continue
                 
+            # 1.5 Check if ingestion is active (Approval Gate)
+            if not fitbit_bp.storage.get_active_status(email):
+                log.info("Skipping %s: Ingestion is suspended/pending approval.", email)
+                continue
+                
             log.info("FOUND GOOGLE USER: Checking Heart Ingest for %s", email)
             
             # 2. Determine Gap Range
@@ -450,6 +455,11 @@ def google_health_sleep_ingest():
             if oauth_type != 'google':
                 log.info("Skipping %s: oauth_type is %s", email, oauth_type)
                 continue
+
+            # 1.5 Check if ingestion is active (Approval Gate)
+            if not fitbit_bp.storage.get_active_status(email):
+                log.info("Skipping %s: Ingestion is suspended/pending approval.", email)
+                continue
                 
             log.info("FOUND GOOGLE USER: Checking Sleep Ingest for %s", email)
             
@@ -621,6 +631,11 @@ def google_health_movement_ingest():
             oauth_type = fitbit_bp.storage.get_oauth_type(email)
             if oauth_type != 'google':
                 log.info("Skipping %s: oauth_type is %s", email, oauth_type)
+                continue
+
+            # 1.5 Check if ingestion is active (Approval Gate)
+            if not fitbit_bp.storage.get_active_status(email):
+                log.info("Skipping %s: Ingestion is suspended/pending approval.", email)
                 continue
                 
             log.info("FOUND GOOGLE USER: Checking Movement Ingest for %s", email)
@@ -806,6 +821,11 @@ def google_health_biometrics_ingest():
             oauth_type = fitbit_bp.storage.get_oauth_type(email)
             if oauth_type != 'google':
                 log.info("Skipping %s: oauth_type is %s", email, oauth_type)
+                continue
+
+            # 1.5 Check if ingestion is active (Approval Gate)
+            if not fitbit_bp.storage.get_active_status(email):
+                log.info("Skipping %s: Ingestion is suspended/pending approval.", email)
                 continue
                 
             log.info("FOUND GOOGLE USER: Checking Biometrics Ingest for %s", email)
@@ -1028,6 +1048,11 @@ def google_health_exertion_ingest():
             oauth_type = fitbit_bp.storage.get_oauth_type(email)
             if oauth_type != 'google':
                 log.info("Skipping %s: oauth_type is %s", email, oauth_type)
+                continue
+
+            # 1.5 Check if ingestion is active (Approval Gate)
+            if not fitbit_bp.storage.get_active_status(email):
+                log.info("Skipping %s: Ingestion is suspended/pending approval.", email)
                 continue
                 
             log.info("FOUND GOOGLE USER: Checking Exertion Ingest for %s", email)
@@ -1451,6 +1476,11 @@ def google_health_heart_intraday_ingest():
             oauth_type = fitbit_bp.storage.get_oauth_type(email)
             if oauth_type != 'google':
                 log.info("Skipping %s: oauth_type is %s", email, oauth_type)
+                continue
+
+            # 1.5 Check if ingestion is active (Approval Gate)
+            if not fitbit_bp.storage.get_active_status(email):
+                log.info("Skipping %s: Ingestion is suspended/pending approval.", email)
                 continue
                 
             log.info("FOUND GOOGLE USER: Checking Heart Intraday Ingest for %s", email)
@@ -5698,8 +5728,11 @@ class fitbit_data():
 
     def get_google_last_date(self, table_name):
         last_date = None
+        # Intraday tables use 'timestamp', daily tables use 'date'
+        column_name = "DATE(timestamp)" if "intraday" in table_name else "date"
+        
         sql = f"""
-            SELECT max(date) as max_date FROM `{client.project}.{bigquery_datasetname}.{table_name}` 
+            SELECT max({column_name}) as max_date FROM `{client.project}.{bigquery_datasetname}.{table_name}` 
             where id = @id
         """
         try:
