@@ -176,6 +176,21 @@ def _date_pulled():
     return date_pulled.strftime("%Y-%m-%d")
 
 
+def _chunk_date_range(start_date, end_date, max_days=14):
+    """
+    Splits a date range into a list of tuples (chunk_start, chunk_end)
+    where each chunk's duration is at most max_days.
+    Accepts both datetime.date and datetime.datetime objects, returning the same type.
+    """
+    chunks = []
+    current_start = start_date
+    while current_start <= end_date:
+        current_end = min(current_start + timedelta(days=max_days - 1), end_date)
+        chunks.append((current_start, current_end))
+        current_start = current_end + timedelta(days=1)
+    return chunks
+
+
 def _get_google_session(user_email):
     """Retrieve an authorized Google session for the given user"""
     fitbit_bp.storage.user = user_email
@@ -303,17 +318,24 @@ def google_health_heart_ingest():
                 continue
 
             # --- FETCH 1: Heart Rate Rollup (Avg/Min/Max) ---
-            payload = _build_google_rollup_payload(start_date, yesterday)
             url_rollup = "https://health.googleapis.com/v4/users/me/dataTypes/heart-rate/dataPoints:dailyRollUp"
             
-            log.info("%s: Fetching HR Rollup from %s", email, start_date)
-            resp_rollup = session_gh.post(url_rollup, json=payload)
-            if resp_rollup.status_code != 200:
-                log.error("%s: Rollup API error: %s", email, resp_rollup.text)
-                results.append(f"{email}: Rollup Error {resp_rollup.status_code}")
-                continue
+            chunks = _chunk_date_range(start_date, yesterday, max_days=14)
+            rollup_points = []
+            failed_rollup = False
+            for chunk_start, chunk_end in chunks:
+                payload = _build_google_rollup_payload(chunk_start, chunk_end)
+                log.info("%s: Fetching HR Rollup from %s to %s", email, chunk_start, chunk_end)
+                resp_rollup = session_gh.post(url_rollup, json=payload)
+                if resp_rollup.status_code != 200:
+                    log.error("%s: Rollup API error: %s", email, resp_rollup.text)
+                    results.append(f"{email}: Rollup Error {resp_rollup.status_code}")
+                    failed_rollup = True
+                    break
+                rollup_points.extend(resp_rollup.json().get('rollupDataPoints', []))
                 
-            rollup_points = resp_rollup.json().get('rollupDataPoints', [])
+            if failed_rollup:
+                continue
             hr_rows = []
             for pt in rollup_points:
                 s_date = pt['civilStartTime']['date']
@@ -666,79 +688,81 @@ def google_health_movement_ingest():
                 continue
 
             # --- FETCH 1: Steps (dailyRollUp) ---
-            payload = _build_google_rollup_payload(start_date, yesterday)
             url_steps = "https://health.googleapis.com/v4/users/me/dataTypes/steps/dataPoints:dailyRollUp"
+            url_floors = "https://health.googleapis.com/v4/users/me/dataTypes/floors/dataPoints:dailyRollUp"
+            url_distance = "https://health.googleapis.com/v4/users/me/dataTypes/distance/dataPoints:dailyRollUp"
+            url_calories = "https://health.googleapis.com/v4/users/me/dataTypes/total-calories/dataPoints:dailyRollUp"
             
-            log.info("%s: Fetching Steps from %s", email, start_date)
-            resp_steps = session_gh.post(url_steps, json=payload)
-            if resp_steps.status_code != 200:
-                log.error("%s: Steps API error: %s", email, resp_steps.text)
-                results.append(f"{email}: Steps Error {resp_steps.status_code}")
+            chunks = _chunk_date_range(start_date, yesterday, max_days=14)
+            steps_rows = []
+            floors_rows = []
+            dist_rows = []
+            calories_rows = []
+            failed_movement = False
+            
+            for chunk_start, chunk_end in chunks:
+                payload = _build_google_rollup_payload(chunk_start, chunk_end)
+                
+                log.info("%s: Fetching Steps from %s to %s", email, chunk_start, chunk_end)
+                resp_steps = session_gh.post(url_steps, json=payload)
+                if resp_steps.status_code != 200:
+                    log.error("%s: Steps API error: %s", email, resp_steps.text)
+                    results.append(f"{email}: Steps Error {resp_steps.status_code}")
+                    failed_movement = True
+                    break
+                for pt in resp_steps.json().get('rollupDataPoints', []):
+                    s_date = pt['civilStartTime']['date']
+                    steps_count = int(pt.get('steps', {}).get('countSum', 0))
+                    steps_rows.append({
+                        'id': email,
+                        'date': date(s_date['year'], s_date['month'], s_date['day']),
+                        'steps': steps_count
+                    })
+                    
+                log.info("%s: Fetching Floors from %s to %s", email, chunk_start, chunk_end)
+                resp_floors = session_gh.post(url_floors, json=payload)
+                if resp_floors.status_code == 200:
+                    for pt in resp_floors.json().get('rollupDataPoints', []):
+                        f_date = pt['civilStartTime']['date']
+                        f_dict = pt.get('floors', {})
+                        f_count = f_dict.get('countSum')
+                        floors_rows.append({
+                            'id': email,
+                            'date': date(f_date['year'], f_date['month'], f_date['day']),
+                            'floors': int(f_count) if f_count is not None else 0
+                        })
+                        
+                log.info("%s: Fetching Distance from %s to %s", email, chunk_start, chunk_end)
+                resp_dist = session_gh.post(url_distance, json=payload)
+                if resp_dist.status_code == 200:
+                    for pt in resp_dist.json().get('rollupDataPoints', []):
+                        d_date = pt['civilStartTime']['date']
+                        d_dict = pt.get('distance', {})
+                        mm_sum = d_dict.get('millimetersSum')
+                        meters = float(mm_sum) / 1000.0 if mm_sum is not None else 0.0
+                        dist_rows.append({
+                            'id': email,
+                            'date': date(d_date['year'], d_date['month'], d_date['day']),
+                            'distance_m': meters
+                        })
+                        
+                log.info("%s: Fetching Calories from %s to %s", email, chunk_start, chunk_end)
+                resp_cal = session_gh.post(url_calories, json=payload)
+                if resp_cal.status_code == 200:
+                    for pt in resp_cal.json().get('rollupDataPoints', []):
+                        c_date = pt['civilStartTime']['date']
+                        calories_rows.append({
+                            'id': email,
+                            'date': date(c_date['year'], c_date['month'], c_date['day']),
+                            'calories_kcal': pt.get('totalCalories', {}).get('kcalSum', 0.0)
+                        })
+                        
+            if failed_movement:
                 continue
                 
-            steps_rows = []
-            for pt in resp_steps.json().get('rollupDataPoints', []):
-                s_date = pt['civilStartTime']['date']
-                steps_count = int(pt.get('steps', {}).get('countSum', 0))
-                steps_rows.append({
-                    'id': email,
-                    'date': date(s_date['year'], s_date['month'], s_date['day']),
-                    'steps': steps_count
-                })
             df_steps = pd.DataFrame(steps_rows, columns=['id', 'date', 'steps'])
-
-            # --- FETCH 2: Floors (dailyRollUp) ---
-            url_floors = "https://health.googleapis.com/v4/users/me/dataTypes/floors/dataPoints:dailyRollUp"
-            log.info("%s: Fetching Floors", email)
-            resp_floors = session_gh.post(url_floors, json=payload)
-            
-            floors_rows = []
-            if resp_floors.status_code == 200:
-                for pt in resp_floors.json().get('rollupDataPoints', []):
-                    f_date = pt['civilStartTime']['date']
-                    f_dict = pt.get('floors', {})
-                    f_count = f_dict.get('countSum')
-                    floors_rows.append({
-                        'id': email,
-                        'date': date(f_date['year'], f_date['month'], f_date['day']),
-                        'floors': int(f_count) if f_count is not None else 0
-                    })
             df_floors = pd.DataFrame(floors_rows, columns=['id', 'date', 'floors'])
-
-            # --- FETCH 3: Distance (dailyRollUp) ---
-            url_distance = "https://health.googleapis.com/v4/users/me/dataTypes/distance/dataPoints:dailyRollUp"
-            log.info("%s: Fetching Distance", email)
-            resp_dist = session_gh.post(url_distance, json=payload)
-            
-            dist_rows = []
-            if resp_dist.status_code == 200:
-                for pt in resp_dist.json().get('rollupDataPoints', []):
-                    d_date = pt['civilStartTime']['date']
-                    d_dict = pt.get('distance', {})
-                    mm_sum = d_dict.get('millimetersSum')
-                    # Convert millimeters to meters
-                    meters = float(mm_sum) / 1000.0 if mm_sum is not None else 0.0
-                    dist_rows.append({
-                        'id': email,
-                        'date': date(d_date['year'], d_date['month'], d_date['day']),
-                        'distance_m': meters
-                    })
             df_dist = pd.DataFrame(dist_rows, columns=['id', 'date', 'distance_m'])
-
-            # --- FETCH 4: Calories (dailyRollUp) ---
-            url_calories = "https://health.googleapis.com/v4/users/me/dataTypes/total-calories/dataPoints:dailyRollUp"
-            log.info("%s: Fetching Calories", email)
-            resp_cal = session_gh.post(url_calories, json=payload)
-            
-            calories_rows = []
-            if resp_cal.status_code == 200:
-                for pt in resp_cal.json().get('rollupDataPoints', []):
-                    c_date = pt['civilStartTime']['date']
-                    calories_rows.append({
-                        'id': email,
-                        'date': date(c_date['year'], c_date['month'], c_date['day']),
-                        'calories_kcal': pt.get('totalCalories', {}).get('kcalSum', 0.0)
-                    })
             df_calories = pd.DataFrame(calories_rows, columns=['id', 'date', 'calories_kcal'])
 
             # --- MERGE & PREPARE ---
@@ -1082,112 +1106,104 @@ def google_health_exertion_ingest():
                 results.append(f"{email}: Session fail")
                 continue
 
-            # 4. Prepare Payload for Rollups
-            payload = {
-                "range": {
-                    "start": {
-                        "date": {"year": start_date.year, "month": start_date.month, "day": start_date.day},
-                        "time": {"hours": 0, "minutes": 0, "seconds": 0, "nanos": 0}
-                    },
-                    "end": {
-                        "date": {"year": yesterday.year, "month": yesterday.month, "day": yesterday.day},
-                        "time": {"hours": 23, "minutes": 59, "seconds": 59, "nanos": 0}
-                    }
-                },
-                "windowSizeDays": 1
-            }
+            # 4. Chunk Date Range and Query Exertion Endpoints
+            chunks = _chunk_date_range(start_date, yesterday, max_days=14)
+            azm_data = {}
+            zone_data = {}
+            sedentary_data = {}
+            threshold_data = {}
+            failed_exertion = False
 
-            # --- FETCH 1: Active Zone Minutes (AZM) ---
             url_azm = "https://health.googleapis.com/v4/users/me/dataTypes/active-zone-minutes/dataPoints:dailyRollUp"
-            log.info("%s: Fetching AZM", email)
-            resp_azm = session_gh.post(url_azm, json=payload)
-            
-            azm_data = {} # (date) -> {fatburn, cardio, peak}
-            if resp_azm.status_code == 200:
-                for pt in resp_azm.json().get('rollupDataPoints', []):
-                    d_obj = pt['civilStartTime']['date']
-                    row_date = date(d_obj['year'], d_obj['month'], d_obj['day'])
-                    
-                    inner = pt.get('activeZoneMinutes', {})
-                    azm_data[row_date] = {
-                        'azm_fat_burn': int(inner.get('sumInFatBurnHeartZone', 0)),
-                        'azm_cardio': int(inner.get('sumInCardioHeartZone', 0)),
-                        'azm_peak': int(inner.get('sumInPeakHeartZone', 0))
-                    }
-
-            # --- FETCH 2: HR Zones (Durations) ---
             url_zones = "https://health.googleapis.com/v4/users/me/dataTypes/time-in-heart-rate-zone/dataPoints:dailyRollUp"
-            log.info("%s: Fetching Heart Rate Zone Durations", email)
-            resp_zones = session_gh.post(url_zones, json=payload)
-            
-            zone_data = {} # (date) -> {light, mod, vig, peak}
-            if resp_zones.status_code == 200:
-                for pt in resp_zones.json().get('rollupDataPoints', []):
-                    d_obj = pt['civilStartTime']['date']
-                    row_date = date(d_obj['year'], d_obj['month'], d_obj['day'])
-                    
-                    row_vals = {'hr_zone_light_min': 0.0, 'hr_zone_moderate_min': 0.0, 'hr_zone_vigorous_min': 0.0, 'hr_zone_peak_min': 0.0}
-                    for zone in pt.get('timeInHeartRateZone', {}).get('timeInHeartRateZones', []):
-                        z_name = zone['heartRateZone']
-                        dur_min = parse_duration_to_min(zone.get('duration'))
-                        if z_name == 'LIGHT': row_vals['hr_zone_light_min'] = dur_min
-                        elif z_name == 'MODERATE': row_vals['hr_zone_moderate_min'] = dur_min
-                        elif z_name == 'VIGOROUS': row_vals['hr_zone_vigorous_min'] = dur_min
-                        elif z_name == 'PEAK': row_vals['hr_zone_peak_min'] = dur_min
-                    
-                    zone_data[row_date] = row_vals
-
-            # --- FETCH 3: Sedentary ---
             url_sedentary = "https://health.googleapis.com/v4/users/me/dataTypes/sedentary-period/dataPoints:dailyRollUp"
-            log.info("%s: Fetching Sedentary Time", email)
-            resp_sedentary = session_gh.post(url_sedentary, json=payload)
-            
-            sedentary_data = {} # (date) -> {sedentary_min}
-            if resp_sedentary.status_code == 200:
-                for pt in resp_sedentary.json().get('rollupDataPoints', []):
-                    d_obj = pt['civilStartTime']['date']
-                    row_date = date(d_obj['year'], d_obj['month'], d_obj['day'])
-                    dur_min = parse_duration_to_min(pt.get('sedentaryPeriod', {}).get('durationSum'))
-                    sedentary_data[row_date] = {'sedentary_min': dur_min}
-
-            # --- FETCH 4: HR Zone Thresholds (BPM Ranges) ---
-            # Date range: start_date to yesterday
-            f_start = start_date.strftime("%Y-%m-%d")
-            f_end = (yesterday + timedelta(days=1)).strftime("%Y-%m-%d")
-            filter_str = f'daily_heart_rate_zones.date >= "{f_start}" AND daily_heart_rate_zones.date < "{f_end}"'
             url_thresholds = "https://health.googleapis.com/v4/users/me/dataTypes/daily-heart-rate-zones/dataPoints:reconcile"
-            
-            log.info("%s: Fetching HR Zone Thresholds (BPM)", email)
-            resp_thresholds = session_gh.get(url_thresholds, params={'filter': filter_str})
-            
-            threshold_data = {} # (date) -> {hr_light_min, etc}
-            if resp_thresholds.status_code == 200:
-                for pt in resp_thresholds.json().get('dataPoints', []):
-                    d_obj = pt['dailyHeartRateZones']['date']
-                    row_date = date(d_obj['year'], d_obj['month'], d_obj['day'])
-                    
-                    thresh_vals = {
-                        'hr_light_min': 0, 'hr_light_max': 0,
-                        'hr_mod_min': 0, 'hr_mod_max': 0,
-                        'hr_vig_min': 0, 'hr_vig_max': 0,
-                        'hr_peak_min': 0, 'hr_peak_max': 0
-                    }
-                    
-                    for zone in pt['dailyHeartRateZones'].get('heartRateZones', []):
-                        z_type = zone['heartRateZoneType']
-                        z_min = int(zone.get('minBeatsPerMinute', 0))
-                        z_max = int(zone.get('maxBeatsPerMinute', 0))
-                        
-                        if z_type == 'LIGHT':
-                            thresh_vals['hr_light_min'], thresh_vals['hr_light_max'] = z_min, z_max
-                        elif z_type == 'MODERATE':
-                            thresh_vals['hr_mod_min'], thresh_vals['hr_mod_max'] = z_min, z_max
-                        elif z_type == 'VIGOROUS':
-                            thresh_vals['hr_vig_min'], thresh_vals['hr_vig_max'] = z_min, z_max
-                        elif z_type == 'PEAK':
-                            thresh_vals['hr_peak_min'], thresh_vals['hr_peak_max'] = z_min, z_max
-                    
-                    threshold_data[row_date] = thresh_vals
+
+            for chunk_start, chunk_end in chunks:
+                payload = {
+                    "range": {
+                        "start": {
+                            "date": {"year": chunk_start.year, "month": chunk_start.month, "day": chunk_start.day},
+                            "time": {"hours": 0, "minutes": 0, "seconds": 0, "nanos": 0}
+                        },
+                        "end": {
+                            "date": {"year": chunk_end.year, "month": chunk_end.month, "day": chunk_end.day},
+                            "time": {"hours": 23, "minutes": 59, "seconds": 59, "nanos": 0}
+                        }
+                    },
+                    "windowSizeDays": 1
+                }
+
+                # --- FETCH 1: Active Zone Minutes (AZM) ---
+                log.info("%s: Fetching AZM from %s to %s", email, chunk_start, chunk_end)
+                resp_azm = session_gh.post(url_azm, json=payload)
+                if resp_azm.status_code == 200:
+                    for pt in resp_azm.json().get('rollupDataPoints', []):
+                        d_obj = pt['civilStartTime']['date']
+                        row_date = date(d_obj['year'], d_obj['month'], d_obj['day'])
+                        inner = pt.get('activeZoneMinutes', {})
+                        azm_data[row_date] = {
+                            'azm_fat_burn': int(inner.get('sumInFatBurnHeartZone', 0)),
+                            'azm_cardio': int(inner.get('sumInCardioHeartZone', 0)),
+                            'azm_peak': int(inner.get('sumInPeakHeartZone', 0))
+                        }
+
+                # --- FETCH 2: HR Zones (Durations) ---
+                log.info("%s: Fetching Heart Rate Zone Durations from %s to %s", email, chunk_start, chunk_end)
+                resp_zones = session_gh.post(url_zones, json=payload)
+                if resp_zones.status_code == 200:
+                    for pt in resp_zones.json().get('rollupDataPoints', []):
+                        d_obj = pt['civilStartTime']['date']
+                        row_date = date(d_obj['year'], d_obj['month'], d_obj['day'])
+                        row_vals = {'hr_zone_light_min': 0.0, 'hr_zone_moderate_min': 0.0, 'hr_zone_vigorous_min': 0.0, 'hr_zone_peak_min': 0.0}
+                        for zone in pt.get('timeInHeartRateZone', {}).get('timeInHeartRateZones', []):
+                            z_name = zone['heartRateZone']
+                            dur_min = parse_duration_to_min(zone.get('duration'))
+                            if z_name == 'LIGHT': row_vals['hr_zone_light_min'] = dur_min
+                            elif z_name == 'MODERATE': row_vals['hr_zone_moderate_min'] = dur_min
+                            elif z_name == 'VIGOROUS': row_vals['hr_zone_vigorous_min'] = dur_min
+                            elif z_name == 'PEAK': row_vals['hr_zone_peak_min'] = dur_min
+                        zone_data[row_date] = row_vals
+
+                # --- FETCH 3: Sedentary ---
+                log.info("%s: Fetching Sedentary Time from %s to %s", email, chunk_start, chunk_end)
+                resp_sedentary = session_gh.post(url_sedentary, json=payload)
+                if resp_sedentary.status_code == 200:
+                    for pt in resp_sedentary.json().get('rollupDataPoints', []):
+                        d_obj = pt['civilStartTime']['date']
+                        row_date = date(d_obj['year'], d_obj['month'], d_obj['day'])
+                        dur_min = parse_duration_to_min(pt.get('sedentaryPeriod', {}).get('durationSum'))
+                        sedentary_data[row_date] = {'sedentary_min': dur_min}
+
+                # --- FETCH 4: HR Zone Thresholds (BPM Ranges) ---
+                f_start = chunk_start.strftime("%Y-%m-%d")
+                f_end = (chunk_end + timedelta(days=1)).strftime("%Y-%m-%d")
+                filter_str = f'daily_heart_rate_zones.date >= "{f_start}" AND daily_heart_rate_zones.date < "{f_end}"'
+                log.info("%s: Fetching HR Zone Thresholds (BPM) from %s to %s", email, f_start, f_end)
+                resp_thresholds = session_gh.get(url_thresholds, params={'filter': filter_str})
+                if resp_thresholds.status_code == 200:
+                    for pt in resp_thresholds.json().get('dataPoints', []):
+                        d_obj = pt['dailyHeartRateZones']['date']
+                        row_date = date(d_obj['year'], d_obj['month'], d_obj['day'])
+                        thresh_vals = {
+                            'hr_light_min': 0, 'hr_light_max': 0,
+                            'hr_mod_min': 0, 'hr_mod_max': 0,
+                            'hr_vig_min': 0, 'hr_vig_max': 0,
+                            'hr_peak_min': 0, 'hr_peak_max': 0
+                        }
+                        for zone in pt['dailyHeartRateZones'].get('heartRateZones', []):
+                            z_type = zone['heartRateZoneType']
+                            z_min = int(zone.get('minBeatsPerMinute', 0))
+                            z_max = int(zone.get('maxBeatsPerMinute', 0))
+                            if z_type == 'LIGHT':
+                                thresh_vals['hr_light_min'], thresh_vals['hr_light_max'] = z_min, z_max
+                            elif z_type == 'MODERATE':
+                                thresh_vals['hr_mod_min'], thresh_vals['hr_mod_max'] = z_min, z_max
+                            elif z_type == 'VIGOROUS':
+                                thresh_vals['hr_vig_min'], thresh_vals['hr_vig_max'] = z_min, z_max
+                            elif z_type == 'PEAK':
+                                thresh_vals['hr_peak_min'], thresh_vals['hr_peak_max'] = z_min, z_max
+                        threshold_data[row_date] = thresh_vals
 
             # --- CONSOLIDATE ---
             all_dates = set(azm_data.keys()) | set(zone_data.keys()) | set(sedentary_data.keys()) | set(threshold_data.keys())
