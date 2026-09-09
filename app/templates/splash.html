@@ -349,45 +349,19 @@
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
           </button>
-          <a class="navbar-brand" href="/index">Wide Lens Health</a>
+          <a class="navbar-brand" href="/">Wide Lens Health</a>
         </div>
         <div id="navbar" class="navbar-collapse collapse">
           <ul class="nav navbar-nav navbar-right">
-            <li class="active"><a href="/index">Home</a></li>
-            
-            {% if current_user.is_authenticated and current_user.role == 'provider' %}
-              <li class="dropdown">
-                <a href="#" data-toggle="dropdown" class="dropdown-toggle" role="button" aria-expanded="false">Researcher Dashboard <b class="caret"></b></a>
-                <ul class="dropdown-menu" role="menu">
-                    <li><a href="/sysadmin">Manage Care Windows</a></li>
-                    <li><a href="/campaignadmin">Manage Outreach Campaigns</a></li>
-                    <li role="separator" class="divider"></li>
-                    <li class="dropdown-header">Enrollees</li>
-                    <li><a href="/patientalerts">Enrollee Care Alerts</a></li>
-                    <li><a href="/patientview">Enrollee Admin and Metrics</a></li>
-                    <li><a href="/study_assess">Enrollee Assessments</a></li>
-                </ul>
-              </li>
-            {% endif %}
-
-            {% if current_user.is_authenticated and current_user.role == 'enrollee' %}
-              <li class="dropdown">
-                <a href="#" data-toggle="dropdown" class="dropdown-toggle" role="button" aria-expanded="false">My Account <b class="caret"></b></a>
-                <ul class="dropdown-menu" role="menu">
-                    <li><a href="/enrollee_metrics">Your Metrics</a></li>
-                </ul>
-              </li>
-            {% endif %}
-            
+            <li class="active"><a href="/">Home</a></li>
             <li><a href="#service">Study Benefits</a></li>
             <li><a href="#feature">Technology</a></li>
             <li><a href="#about">About</a></li>
             
-            {% if not current_user.is_authenticated %}
-              <li><a class="btn-secondary-glow" style="padding: 8px 16px; margin: 6px 5px;" href="/enrollee">Enrollee Portal</a></li>
-              <li><a class="btn-primary-glow" style="padding: 8px 16px; margin: 6px 5px; box-shadow: none;" href="/login">Provider Login</a></li>
+            {% if session is defined and session.get('user') %}
+              <li><a class="btn-secondary-glow" style="padding: 8px 16px; margin: 6px 5px;" href="{{ url_for('frontend_bp.logout') }}">Log Out</a></li>
             {% else %}
-              <li><a class="btn-secondary-glow" style="padding: 8px 16px; margin: 6px 5px;" href="/logout">Log Out</a></li>
+              <li><a class="btn-primary-glow" style="padding: 8px 16px; margin: 6px 5px; box-shadow: none;" href="{{ url_for('frontend_bp.login') }}">Connect Device</a></li>
             {% endif %}
           </ul>
         </div>
@@ -408,15 +382,10 @@
         </p>
         
         <div>
-          {% if not current_user.is_authenticated %}
-            <a href="/enrollee" class="btn-primary-glow"><i class="fa-solid fa-user-check"></i> Enrollee Connect Portal</a>
-            <a href="/login" class="btn-secondary-glow"><i class="fa-solid fa-user-doctor"></i> Researcher Login</a>
+          {% if session is defined and session.get('user') %}
+            <a href="/" class="btn-primary-glow"><i class="fa-solid fa-arrow-right"></i> Go to Device Dashboard</a>
           {% else %}
-            {% if current_user.role == 'provider' %}
-              <a href="/patientview" class="btn-primary-glow"><i class="fa-solid fa-chart-line"></i> Go to Researcher Dashboard</a>
-            {% else %}
-              <a href="/enrollee_metrics" class="btn-primary-glow"><i class="fa-solid fa-heart-pulse"></i> View Your Metrics</a>
-            {% endif %}
+            <a href="{{ url_for('frontend_bp.login') }}" class="btn-primary-glow"><i class="fa-brands fa-google"></i> Connect Your Wearable</a>
           {% endif %}
         </div>
 
